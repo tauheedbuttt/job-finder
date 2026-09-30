@@ -15,11 +15,13 @@ Env (apps/translator/.env)
   JOBFINDER_MODEL_CONFIG  folder list for model discovery (default models.json)
   JOBFINDER_FAKE=1        skip the model, echo "[en] ..." (UI testing)
   JOBFINDER_CACHE         sentence cache file (default cache.sqlite3)
+  LANGFUSE_*              optional, traces /jev token usage (see tracing.py)
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import random
@@ -32,12 +34,13 @@ from typing import List, Tuple
 import httpx
 import regex
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 
 import models
+import tracing
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.environ.get("JOBFINDER_DOTENV", os.path.join(HERE, ".env")))
@@ -241,11 +244,12 @@ engine = Engine()
 async def lifespan(_: FastAPI):
     engine.load()
     yield
+    tracing.shutdown()
 
 
 app = FastAPI(title="job-finder translator", lifespan=lifespan)
 app.add_middleware(
-    CORSMiddleware, allow_origin_regex=ORIGINS, allow_methods=["GET", "POST"], allow_headers=["content-type"]
+    CORSMiddleware, allow_origin_regex=ORIGINS, allow_methods=["GET", "POST"], allow_headers=["content-type", "x-jf-session", "x-jf-flow", "x-jf-url"]
 )
 transport: "httpx.AsyncBaseTransport | None" = None
 pause = asyncio.sleep
@@ -278,21 +282,24 @@ def backoff(attempt: int, res: httpx.Response) -> float:
 
 
 @app.post("/jev")
-async def jev(req: JevRequest):
+async def jev(req: JevRequest, request: Request):
     key = os.environ.get("TYPESAFE_API_KEY")
     if not key:
         return JSONResponse({"detail": "TYPESAFE_API_KEY is not set in apps/translator/.env"}, status_code=503)
     body = {"state": req.state, "model": JEV_MODEL, "questions": req.questions}
     headers = {"authorization": f"Bearer {key}"}
-    async with httpx.AsyncClient(transport=transport, timeout=60) as client:
-        for attempt in range(4):
-            try:
-                res = await client.post(JEV_URL, json=body, headers=headers)
-            except httpx.HTTPError as err:
-                return JSONResponse({"detail": f"TypeSafe unreachable: {type(err).__name__}"}, status_code=502)
-            if res.status_code not in (429, 529) or attempt == 3:
-                break
-            await pause(backoff(attempt, res))
+    with tracing.generation(request.headers, req.state, req.questions, JEV_MODEL) as done:
+        async with httpx.AsyncClient(transport=transport, timeout=60) as client:
+            for attempt in range(4):
+                try:
+                    res = await client.post(JEV_URL, json=body, headers=headers)
+                except httpx.HTTPError as err:
+                    done(502, json.dumps({"detail": type(err).__name__}).encode())
+                    return JSONResponse({"detail": f"TypeSafe unreachable: {type(err).__name__}"}, status_code=502)
+                if res.status_code not in (429, 529) or attempt == 3:
+                    break
+                await pause(backoff(attempt, res))
+        done(res.status_code, res.content)
     kind = res.headers.get("content-type", "application/json")
     return Response(res.content, status_code=res.status_code, media_type=kind)
 

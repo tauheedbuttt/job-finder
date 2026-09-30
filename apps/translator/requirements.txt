@@ -8,3 +8,4 @@ lingua-language-detector>=2.0
 regex>=2024.4
 python-dotenv>=1.0
 httpx>=0.27
+langfuse==4.15.6

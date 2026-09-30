@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFinnish } from "../src/index";
+import { CAP, checkFinnish, checkFinnishFast } from "../src/index";
 import { noul, transport } from "./mock";
 
 const sentences = [
@@ -116,5 +116,42 @@ describe("checkFinnish chunking", () => {
       { id: "s3", kind: "green", p: 0.9 },
       { id: "s90", kind: "red", p: 0.9 },
     ]);
+  });
+});
+
+describe("checkFinnishFast", () => {
+  const one = (p: number) => () => ({ requires_finnish: noul(p) });
+
+  it("sends one request with raw text and only requires_finnish", async () => {
+    const mock = transport(one(0.9));
+    const out = await checkFinnishFast({ text: "Edellytämme sujuvaa suomen kieltä." }, { fetch: mock.fetch });
+    expect(mock.calls).toHaveLength(1);
+    const { state, questions } = mock.calls[0]!.body;
+    expect(state).toEqual({ text: "Edellytämme sujuvaa suomen kieltä." });
+    expect(Object.keys(questions)).toEqual(["requires_finnish"]);
+    expect(questions.requires_finnish.type).toBe("noul");
+    expect(JSON.stringify(questions.requires_finnish.instructions)).toContain("explicitly ask for Finnish language skill");
+    expect(JSON.stringify(questions.requires_finnish.instructions)).toContain("written in Finnish is not evidence");
+    expect(out).toEqual({ verdict: "yes", score: 0.9 });
+  });
+
+  it.each([
+    [0.7, "yes"],
+    [0.3, "no"],
+    [0.5, "unclear"],
+  ])("maps score %s to %s with default thresholds", async (p, verdict) => {
+    const out = await checkFinnishFast({ text: "x" }, { fetch: transport(one(p)).fetch });
+    expect(out.verdict).toBe(verdict);
+  });
+
+  it("honours custom thresholds", async () => {
+    const out = await checkFinnishFast({ text: "x" }, { fetch: transport(one(0.25)).fetch, thresholds: { no: 0.2 } });
+    expect(out.verdict).toBe("unclear");
+  });
+
+  it("truncates long text to the cap", async () => {
+    const mock = transport(one(0.1));
+    await checkFinnishFast({ text: "a".repeat(CAP + 500) }, { fetch: mock.fetch });
+    expect((mock.calls[0]!.body.state as { text: string }).text).toHaveLength(CAP);
   });
 });

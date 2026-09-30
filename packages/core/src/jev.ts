@@ -2,7 +2,7 @@ import { reply, type ChoiceAnswer, type NoulAnswer, type Question, type ScoreAns
 
 export const BASE = "http://localhost:8790";
 
-export type Options = { base?: string; fetch?: typeof fetch; signal?: AbortSignal };
+export type Options = { base?: string; fetch?: typeof fetch; signal?: AbortSignal; headers?: Record<string, string> };
 
 type Typed<Q extends Question> = Q["type"] extends "noul" ? NoulAnswer : Q["type"] extends "choice" ? ChoiceAnswer : ScoreAnswer;
 
@@ -23,7 +23,7 @@ export async function jev<const Q extends Record<string, Question>>(state: unkno
   const url = `${(options.base ?? BASE).replace(/\/+$/, "")}/jev`;
   const res = await send(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { ...options.headers, "content-type": "application/json" },
     body: JSON.stringify({ state, questions }),
     signal: options.signal,
   });

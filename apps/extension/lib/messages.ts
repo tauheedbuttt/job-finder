@@ -15,3 +15,7 @@ export type Send = <T>(msg: Message) => Promise<T>;
 export type Scanned = { url: string; title: string; blocks: Block[]; candidates: Candidate[] };
 export type Marked = { found: string[] };
 export type Applied = { href: string | null; focused: boolean };
+
+// Content scripts run under the page origin, so the background worker does their fetches.
+export type Relay = { type: "relay"; url: string; method?: string; headers?: Record<string, string>; body?: string };
+export type Relayed = { ok: true; status: number; body: string } | { ok: false; error: string };

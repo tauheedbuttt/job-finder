@@ -24,6 +24,10 @@ From the repo root: `pnpm dev:translator`.
 
 `models.json` is a list of folders, relative paths resolve against the file. At startup the first folder with `model.bin` wins. Listed folders are read only, so the kaanna folder is never written. If none has a model, it is converted once into `apps/translator/models/opus-fi-en-ct2` (gitignored) and logged. That folder is always checked, so the model is never downloaded twice.
 
+## Tracing
+
+Set `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_BASE_URL` in `.env` to send every `/jev` call to Langfuse with token usage. Sessions and trace names come from the `x-jf-*` headers the extension sends. See `tracing.py`.
+
 `JOBFINDER_FAKE=1` skips the model and returns `[en] ...` for UI testing.
 
 ## Licence

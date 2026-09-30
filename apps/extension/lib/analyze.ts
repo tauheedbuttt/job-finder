@@ -1,6 +1,7 @@
 import { checkFinnish, pickApply, pickDescription, splitSentences, type Block, type Candidate, type Finnish, type Pick, type Sentence } from "@job-finder/core";
 import type { Marked, Scanned, Send } from "./messages";
 import type { Settings } from "./settings";
+import { trace } from "./trace";
 import { translate } from "./translate";
 
 export const STEPS = ["Reading page", "Finding job description", "Translating", "Checking Finnish", "Finding apply button"] as const;
@@ -42,11 +43,11 @@ export async function analyze(send: Send, settings: Settings, step: (label: (typ
 }
 
 async function run(send: Send, settings: Settings, step: (label: (typeof STEPS)[number]) => void): Promise<Result> {
-  const opts = { base: settings.url };
   step("Reading page");
   await ping(settings.url);
   await send({ type: "clear" });
   const scan = await send<Scanned>({ type: "scan" });
+  const opts = { base: settings.url, headers: trace("panel-analyze", crypto.randomUUID(), scan.url) };
   const applying = pickApply(scan.candidates, opts);
   applying.catch(() => undefined);
 

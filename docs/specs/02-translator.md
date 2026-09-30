@@ -17,6 +17,7 @@ Copy from `/Users/mac/Documents/code/kaanna/server/translate_server.py` and `req
   - `POST /translate { texts: string[] }` -> `{ translations: string[] }` (keep kaanna behaviour: protect urls/code/emoji, sentence cache)
   - `POST /jev { state, questions }` -> forwards to TypeSafe with model `jev-latest` and bearer from env. Returns TypeSafe body unchanged. Pass upstream error status through. Retry 429/529 with backoff, max 3.
 - Missing `TYPESAFE_API_KEY`: `/jev` returns 503 with clear message. Server still starts.
+- Langfuse (optional, `LANGFUSE_*` in `.env`): each `/jev` call = one generation with model, input, output, token usage. Named by question: `finnish-fast`, `finnish-sentences`, `pick-description`, `pick-apply`, `confirm-apply`. Headers `x-jf-session`, `x-jf-flow`, `x-jf-url` set session, trace name/tag, and one trace per session+url. Reason: see where Jev tokens go per feature.
 - `run.sh` creates venv if missing, installs requirements, starts uvicorn.
 - README: credit Opus-MT CC-BY 4.0 Helsinki-NLP.
 

@@ -17,3 +17,8 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 - [ ] Stop translator. Re-run. Clear offline error shown.
 - [ ] Remove `TYPESAFE_API_KEY`. Re-run. Translation shown, Jev 503 error shown.
 - [ ] Change translator URL and thresholds in Settings. Reopen panel. Values kept.
+- [ ] Duunitori list page: each visible card gets a pill. Loading, then verdict. Finnish-required cards vanish.
+- [ ] Finnish card title shows `original - English`. English title unchanged.
+- [ ] Scroll list. New cards get pills. Reload page. Cached pills show instantly.
+- [ ] Card linking to external site: grey or verdict, no crash.
+- [ ] Stop translator on list page. Pills show error, no retry storm.
