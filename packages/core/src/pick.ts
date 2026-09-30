@@ -2,12 +2,12 @@ import { jev, type Options } from "./jev";
 import type { Block, Candidate, Pick } from "./schemas";
 
 // Choice allows 255 options, one is kept for none.
-const LIMIT = 254;
+export const LIMIT = 254;
 const CLIP = 1500;
 
 export type ApplyOptions = Options & { confirm?: number };
 
-function options(ids: string[], none: string): Record<string, string | null> {
+function criteria(ids: string[], none: string): Record<string, string | null> {
   return { ...Object.fromEntries(ids.map((id) => [id, null])), none };
 }
 
@@ -21,7 +21,7 @@ export async function pickApply(candidates: Candidate[], opts: ApplyOptions = {}
         type: "choice",
         instructions:
           "`candidates` are clickable elements on a job posting page. Which candidate, by its `id`, does a job seeker click to start applying for this job?",
-        criteria: options(
+        criteria: criteria(
           list.map((c) => c.id),
           "No candidate starts an application for this job.",
         ),
@@ -61,7 +61,7 @@ export async function pickDescription(blocks: Block[], opts: Options = {}): Prom
         type: "choice",
         instructions:
           "`blocks` are text blocks from a web page, clipped at the end. Which block, by its `id`, is the main description of a single job posting, with its duties and requirements?",
-        criteria: options(
+        criteria: criteria(
           list.map((b) => b.id),
           "No block is a job description.",
         ),

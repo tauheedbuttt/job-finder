@@ -1,8 +1,8 @@
-import { BASE } from "@job-finder/core";
+import { BASE, thresholds } from "@job-finder/core";
 
 export type Settings = { url: string; yes: number; no: number; span: number };
 
-export const defaults: Settings = { url: BASE, yes: 0.7, no: 0.3, span: 0.6 };
+export const defaults: Settings = { url: BASE, ...thresholds.parse({}) };
 
 export async function load(): Promise<Settings> {
   const got = await browser.storage.local.get("settings");

@@ -1,4 +1,4 @@
-import type { Block, Candidate } from "@job-finder/core";
+import { LIMIT, type Block, type Candidate } from "@job-finder/core";
 
 export type Scan<T> = { data: T[]; elements: Map<string, Element> };
 
@@ -7,7 +7,6 @@ const BREAK = new Set([
   "P", "DIV", "LI", "UL", "OL", "BR", "H1", "H2", "H3", "H4", "H5", "H6", "TR", "TD", "TH", "SECTION",
   "ARTICLE", "HEADER", "FOOTER", "MAIN", "ASIDE", "BLOCKQUOTE", "PRE", "DT", "DD", "TABLE", "FORM",
 ]);
-const LIMIT = 254;
 const BLOCKS = 30;
 const MIN = 200;
 

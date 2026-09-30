@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: "Job Finder",
     description: "Side panel that checks if a job needs Finnish and finds the apply button.",
-    permissions: ["sidePanel", "storage", "scripting", "tabs"],
+    permissions: ["sidePanel", "storage", "scripting"],
     host_permissions: ["<all_urls>"],
     action: { default_title: "Job Finder" },
   },

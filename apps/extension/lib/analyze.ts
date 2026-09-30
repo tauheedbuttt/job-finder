@@ -9,11 +9,9 @@ import {
   type Pick,
   type Sentence,
 } from "@job-finder/core";
-import type { Marked, Message, Scanned } from "./messages";
+import type { Marked, Scanned, Send } from "./messages";
 import type { Settings } from "./settings";
 import { translate } from "./translate";
-
-export type Send = <T>(msg: Message) => Promise<T>;
 
 export type Result = {
   url: string;

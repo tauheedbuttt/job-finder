@@ -1,5 +1,4 @@
-import type { Send } from "./analyze";
-import type { Message } from "./messages";
+import type { Message, Send } from "./messages";
 
 export async function active(): Promise<number> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

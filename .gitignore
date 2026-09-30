@@ -8,3 +8,4 @@ dist
 .nx
 __pycache__
 .pytest_cache
+apps/translator/models

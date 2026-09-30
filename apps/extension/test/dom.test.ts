@@ -69,3 +69,35 @@ describe("scanCandidates", () => {
     expect(scanCandidates(document).data).toHaveLength(254);
   });
 });
+
+describe("DOM-only posting", () => {
+  beforeEach(() => load("plain.html"));
+
+  it("finds the description container without JSON-LD", () => {
+    const { data, elements } = scanBlocks(document);
+    expect(data.every((b) => b.source === "dom")).toBe(true);
+    const desc = data.find((b) => b.text.includes("backend developer"));
+    expect(elements.get(desc!.id)?.className).toBe("desc");
+  });
+
+  it("keeps link href, title as aria, and submit input value", () => {
+    const { data } = scanCandidates(document);
+    expect(data.find((c) => c.text === "Apply")).toMatchObject({
+      tag: "a",
+      href: "https://apply.example.com/acme/123",
+      aria: "Apply now",
+      context: "section: Backend Developer",
+    });
+    expect(data.find((c) => c.tag === "input")?.text).toBe("Save job");
+  });
+});
+
+describe("non-job page", () => {
+  beforeEach(() => load("nonjob.html"));
+
+  it("yields no blocks and skips disabled buttons", () => {
+    expect(scanBlocks(document).data).toEqual([]);
+    const { data } = scanCandidates(document);
+    expect(data.map((c) => c.text)).toEqual(["More"]);
+  });
+});

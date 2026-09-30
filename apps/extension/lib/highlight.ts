@@ -1,3 +1,5 @@
+import type { Span } from "@job-finder/core";
+
 const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"]);
 
 type Spot = { node: Text; offset: number };
@@ -36,7 +38,7 @@ export function locate(root: Node, sentence: string): Range | null {
 
 const STYLE = "::highlight(jf-red){background:#ffb3b3;color:inherit}::highlight(jf-green){background:#b8f0c2;color:inherit}";
 
-export type Kind = "red" | "green";
+export type Kind = Span["kind"];
 
 export function paint(ranges: Array<{ range: Range; kind: Kind }>): void {
   clear();

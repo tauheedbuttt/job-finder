@@ -10,6 +10,8 @@ export type Message =
   | { type: "jump"; id: string }
   | { type: "apply"; id: string };
 
+export type Send = <T>(msg: Message) => Promise<T>;
+
 export type Scanned = { url: string; title: string; blocks: Block[]; candidates: Candidate[] };
 export type Marked = { found: string[] };
 export type Applied = { href: string | null; focused: boolean };
