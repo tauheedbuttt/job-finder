@@ -13,6 +13,8 @@ import type { Marked, Scanned, Send } from "./messages";
 import type { Settings } from "./settings";
 import { translate } from "./translate";
 
+export const STEPS = ["Reading page", "Finding job description", "Translating", "Checking Finnish", "Finding apply button"] as const;
+
 export type Result = {
   url: string;
   title: string;
@@ -32,7 +34,7 @@ function fallback(blocks: Block[]): Block | null {
   return blocks.find((b) => b.source === "jsonld") ?? [...blocks].sort((a, b) => b.text.length - a.text.length)[0] ?? null;
 }
 
-export async function analyze(send: Send, settings: Settings, step: (label: string) => void): Promise<Result> {
+export async function analyze(send: Send, settings: Settings, step: (label: (typeof STEPS)[number]) => void): Promise<Result> {
   const errors: string[] = [];
   const opts = { base: settings.url };
   step("Reading page");
