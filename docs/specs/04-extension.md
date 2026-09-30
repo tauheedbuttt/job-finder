@@ -15,7 +15,7 @@ Side panel on right, works on any site. Manual job exploration.
 - Panel: apply button (opens href, or focuses element if not link), translated JD, toggle original/translated.
 - Page highlights: red for `fi_` spans, green for `en_` spans. Match sentence text in DOM via Range. Clear on re-run. Click panel badge to jump to first evidence.
 - Settings: translator URL (default `http://localhost:8790`), thresholds. Stored in `chrome.storage.local`.
-- Offline translator: show clear error, still run Jev if possible.
+- Offline translator: `/jev` is also down, so show one clear error and stop. No partial run. Reason: Jev is proxied by the translator.
 - Host permissions: all urls, needed for any-site panel.
 
 ## Tests

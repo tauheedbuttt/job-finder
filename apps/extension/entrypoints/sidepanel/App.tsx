@@ -79,7 +79,7 @@ export default function App() {
             className="icon"
             aria-label={original ? "Show translation" : "Show original"}
             aria-pressed={original}
-            disabled={!result?.translated}
+            disabled={!result?.block}
             onClick={() => setOriginal(!original)}
           >
             <Translate size={16} />
@@ -179,18 +179,11 @@ export default function App() {
                   </div>
                 ) : null}
 
-                {result.errors.map((e) => (
-                  <p className="alert" key={e}>
-                    <WarningCircle size={16} />
-                    <span>{e}</span>
-                  </p>
-                ))}
-
                 {result.block ? (
                   <article className="jd">
                     <h1>{result.title || "Job description"}</h1>
                     <p className="meta">
-                      {original ? "Original" : result.translated ? "Translated" : "Original, not translated"}
+                      {original ? "Original" : "Translated"}
                       {spans.length > 0 && `, ${found.length} of ${spans.length} evidence sentences on page`}
                     </p>
                     {result.sentences.map((s) => {

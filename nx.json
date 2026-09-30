@@ -1,8 +1,15 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "targetDefaults": {
-    "dev": { "cache": false },
-    "test": { "cache": true },
-    "typecheck": { "cache": true }
-  }
+    "dev": {
+      "cache": false
+    },
+    "test": {
+      "cache": true
+    },
+    "typecheck": {
+      "cache": true
+    }
+  },
+  "analytics": true
 }
