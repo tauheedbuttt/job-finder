@@ -1,0 +1,10 @@
+node_modules
+.venv
+.env
+dist
+.output
+*.sqlite3
+.wxt
+.nx
+__pycache__
+.pytest_cache
