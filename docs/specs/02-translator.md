@@ -10,7 +10,7 @@ Copy from `/Users/mac/Documents/code/kaanna/server/translate_server.py` and `req
 - Own server. Port from `JOBFINDER_PORT`, default 8790. Never talk to kaanna server.
 - Env via `.env` (python-dotenv). Ship `.env.example`. Real `.env` gitignored.
 - Rename env vars `KAANNA_*` to `JOBFINDER_*`. Own sqlite cache file.
-- Model discovery: `models.json` = list of folders. First item = `/Users/mac/Documents/code/kaanna/server/models/opus-fi-en-ct2`. Startup scans in order for `model.bin`. First hit wins. None found: download once to first writable folder, log it. Never download twice.
+- Model discovery: `models.json` = list of folders. First item = `/Users/mac/Documents/code/kaanna/server/models/opus-fi-en-ct2`. Startup scans in order for `model.bin`. First hit wins. None found: download once to `apps/translator/models`, log it. Never download twice. Never write into the kaanna folder (read only). Reason: kaanna must stay untouched.
 - CORS: allow extension origins and localhost only.
 - Endpoints:
   - `GET /health` -> `{ ok, model, modelPath }`

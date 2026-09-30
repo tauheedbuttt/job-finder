@@ -22,7 +22,7 @@ From the repo root: `pnpm dev:translator`.
 
 ## Model discovery
 
-`models.json` is a list of folders, relative paths resolve against the file. At startup the first folder with `model.bin` wins. If none has one, the model is converted once into the first writable folder and logged. After that the folder has `model.bin`, so it is never downloaded again.
+`models.json` is a list of folders, relative paths resolve against the file. At startup the first folder with `model.bin` wins. Listed folders are read only, so the kaanna folder is never written. If none has a model, it is converted once into `apps/translator/models/opus-fi-en-ct2` (gitignored) and logged. That folder is always checked, so the model is never downloaded twice.
 
 `JOBFINDER_FAKE=1` skips the model and returns `[en] ...` for UI testing.
 
