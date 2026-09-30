@@ -81,32 +81,10 @@ button:disabled {
 .bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 44px;
-  padding: 0 8px 0 14px;
+  justify-content: flex-end;
+  height: 40px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--line);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.on-dark {
-  display: none;
-}
-
-@media (prefers-color-scheme: dark) {
-  .on-dark {
-    display: block;
-  }
-
-  .on-light {
-    display: none;
-  }
 }
 
 .tools {

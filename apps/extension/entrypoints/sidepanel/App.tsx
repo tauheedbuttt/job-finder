@@ -1,11 +1,9 @@
 import { ArrowClockwise, ArrowUpRight, CaretRight, GearSix, Translate, WarningCircle, X } from "@phosphor-icons/react";
-import dark from "@/assets/mark-dark.svg";
-import light from "@/assets/mark-light.svg";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STEPS, analyze, type Result } from "@/lib/analyze";
 import type { Applied, Message } from "@/lib/messages";
 import { defaults, load, save, type Settings } from "@/lib/settings";
-import { active, sender } from "@/lib/tab";
+import { owner, sender } from "@/lib/tab";
 
 const VERDICT = {
   yes: { title: "Finnish required", note: "The posting asks for Finnish." },
@@ -28,14 +26,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [original, setOriginal] = useState(false);
   const [panel, setPanel] = useState(false);
-  const tab = useRef<number | null>(null);
+  const tab = useRef<number | null>(owner(location.search));
 
   const run = useCallback(async (s: Settings) => {
     setError(null);
     setResult(null);
     setStep(STEPS[0]);
     try {
-      tab.current = await active();
+      if (tab.current === null) throw new Error("Open Job Finder from the toolbar icon on a job posting.");
       setResult(await analyze(sender(tab.current), s, setStep));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -75,11 +73,6 @@ export default function App() {
   return (
     <div className="shell">
       <header className="bar">
-        <span className="brand">
-          <img className="mark on-dark" src={dark} alt="" width={16} height={16} />
-          <img className="mark on-light" src={light} alt="" width={16} height={16} />
-          Job Finder
-        </span>
         <div className="tools">
           <button
             className="icon"

@@ -1,9 +1,12 @@
 import type { Message, Send } from "./messages";
 
-export async function active(): Promise<number> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined) throw new Error("No active tab");
-  return tab.id;
+export function panel(tabId: number): string {
+  return `sidepanel.html?tab=${tabId}`;
+}
+
+export function owner(search: string): number | null {
+  const id = Number(new URLSearchParams(search).get("tab") ?? NaN);
+  return Number.isInteger(id) ? id : null;
 }
 
 export function sender(tabId: number): Send {
