@@ -7,7 +7,7 @@ const overall: NoulQuestion = {
   type: "noul",
   instructions: {
     question: "Does this job require or indicate Finnish language skill in any way?",
-    input: "`sentences` is a job description. Each item has the original text `fi` and its English translation `en`.",
+    input: "`sentences` is a job description, or one part of it. Each item has the original text `fi` and its English translation `en`.",
   },
   criteria: {
     true: "Finnish skill is required, preferred, an advantage, or implied by the job.",
@@ -46,18 +46,26 @@ export function finnishQuestions(sentences: Sentence[]): Record<string, NoulQues
   return questions;
 }
 
+// Keeps each request small; every chunk gets the whole-JD question too.
+export const CHUNK = 40;
+
 export async function checkFinnish(input: { sentences: Sentence[] }, options: FinnishOptions = {}): Promise<Finnish> {
   const t = limits.parse(options.thresholds ?? {});
-  const { sentences } = input;
-  const { answers } = await jev({ sentences }, finnishQuestions(sentences), options);
-  const score = answers.requires_finnish!.noul;
+  const chunks: Sentence[][] = [];
+  for (let i = 0; i < input.sentences.length; i += CHUNK) chunks.push(input.sentences.slice(i, i + CHUNK));
+  if (!chunks.length) chunks.push([]);
+  const replies = await Promise.all(chunks.map((sentences) => jev({ sentences }, finnishQuestions(sentences), options)));
+  const score = Math.max(...replies.map((r) => r.answers.requires_finnish!.noul));
   const verdict = score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear";
   const spans: Span[] = [];
-  for (const s of sentences) {
-    const red = answers[`fi_${s.id}`]!.noul;
-    const green = answers[`en_${s.id}`]!.noul;
-    const [kind, p] = green > red ? (["green", green] as const) : (["red", red] as const);
-    if (p >= t.span) spans.push({ id: s.id, kind, p });
-  }
+  chunks.forEach((sentences, c) => {
+    const { answers } = replies[c]!;
+    for (const s of sentences) {
+      const red = answers[`fi_${s.id}`]!.noul;
+      const green = answers[`en_${s.id}`]!.noul;
+      const [kind, p] = green > red ? (["green", green] as const) : (["red", red] as const);
+      if (p >= t.span) spans.push({ id: s.id, kind, p });
+    }
+  });
   return { verdict, score, spans };
 }

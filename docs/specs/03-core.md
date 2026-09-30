@@ -12,6 +12,7 @@ Pure TS shared logic. No DOM dependence except where noted. No phrase lists.
   - Questions: `requires_finnish` (noul, whole JD, "Does this job require or indicate Finnish language skill in any way?"), plus per sentence `fi_{id}` (noul: sentence says Finnish needed) and `en_{id}` (noul: sentence says Finnish not needed or English enough).
   - Result: `{ verdict: yes|no|unclear, score, spans: {id, kind: red|green, p}[] }`. Thresholds configurable, defaults: yes >= 0.7, no <= 0.3, else unclear. Span shown when p >= 0.6.
   - Both original and translated text always given to Jev.
+  - Long JD: chunk sentences, 40 per request, run chunks in parallel. Ask `requires_finnish` in every chunk, merge by max p. Reason: keeps requests small and evidence at the end of a JD is never cut.
 - `pickApply(candidates)`: candidates = `{ id, tag, text, href, aria, context }[]`. Jev `choice` over ids + `none`. Then confirm noul on winner. Returns `{ id | null, confidence }`.
 - `pickDescription(blocks)`: `choice` over block ids + `none`. Blocks from JSON-LD JobPosting and large containers.
 - Candidate builders live in extension (DOM). Core takes plain data.

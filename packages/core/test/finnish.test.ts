@@ -62,3 +62,59 @@ describe("checkFinnish", () => {
     expect(out.spans).toEqual([{ id: "s0", kind: "green", p: 0.8 }]);
   });
 });
+
+describe("checkFinnish chunking", () => {
+  const many = Array.from({ length: 95 }, (_, i) => ({ id: `s${i}`, fi: `Lause ${i}.`, en: `Sentence ${i}.` }));
+
+  it("splits into requests of 40 sentences, each asking requires_finnish", async () => {
+    const mock = transport(reply(0.2, {}), reply(0.2, {}), reply(0.2, {}));
+    await checkFinnish({ sentences: many }, { fetch: mock.fetch });
+    expect(mock.calls).toHaveLength(3);
+    const sizes = mock.calls.map((c) => (c.body.state as { sentences: unknown[] }).sentences.length);
+    expect(sizes.sort((a, b) => b - a)).toEqual([40, 40, 15]);
+    for (const c of mock.calls) {
+      expect(c.body.questions.requires_finnish).toBeDefined();
+      expect(Object.keys(c.body.questions)).toHaveLength(1 + 2 * (c.body.state as { sentences: unknown[] }).sentences.length);
+    }
+  });
+
+  it("indexes sentences within their chunk", async () => {
+    const mock = transport(reply(0.2, {}), reply(0.2, {}), reply(0.2, {}));
+    await checkFinnish({ sentences: many }, { fetch: mock.fetch });
+    const last = mock.calls.find((c) => "fi_s94" in c.body.questions)!;
+    expect(JSON.stringify(last.body.questions.fi_s94)).toContain("`sentences[14]`");
+    expect((last.body.state as { sentences: { id: string }[] }).sentences[14]!.id).toBe("s94");
+  });
+
+  it("runs chunks in parallel", async () => {
+    let open = 0;
+    let peak = 0;
+    const fetch = (async (_url: string, init?: RequestInit) => {
+      open++;
+      peak = Math.max(peak, open);
+      await new Promise((r) => setTimeout(r, 10));
+      open--;
+      const { questions } = JSON.parse(String(init?.body));
+      const answers = Object.fromEntries(Object.keys(questions).map((k) => [k, noul(0.1)]));
+      return new Response(JSON.stringify({ model: "jev", answers }), { status: 200 });
+    }) as typeof globalThis.fetch;
+    await checkFinnish({ sentences: many }, { fetch });
+    expect(peak).toBe(3);
+  });
+
+  it("merges score by max and keeps spans from every chunk", async () => {
+    const answer = (questions: Record<string, unknown>) => {
+      const late = "fi_s90" in questions;
+      return Object.fromEntries(
+        Object.keys(questions).map((k) => [k, noul(k === "requires_finnish" ? (late ? 0.85 : 0.1) : k === "fi_s90" || k === "en_s3" ? 0.9 : 0.05)]),
+      );
+    };
+    const out = await checkFinnish({ sentences: many }, { fetch: transport(answer, answer, answer).fetch });
+    expect(out.score).toBe(0.85);
+    expect(out.verdict).toBe("yes");
+    expect(out.spans).toEqual([
+      { id: "s3", kind: "green", p: 0.9 },
+      { id: "s90", kind: "red", p: 0.9 },
+    ]);
+  });
+});
