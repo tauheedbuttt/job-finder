@@ -41,6 +41,8 @@ import models
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.environ.get("JOBFINDER_DOTENV", os.path.join(HERE, ".env")))
+# Only the tokenizer is used from transformers, so its PyTorch notice is noise.
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 log = logging.getLogger("jobfinder")
 MODEL_HF = models.HF_MODEL
 MODEL_CONFIG = os.path.join(HERE, os.environ.get("JOBFINDER_MODEL_CONFIG", "models.json"))

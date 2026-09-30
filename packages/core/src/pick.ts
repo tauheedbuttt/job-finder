@@ -1,8 +1,7 @@
 import { jev, type Options } from "./jev";
+import { LIMIT } from "./limits";
 import type { Block, Candidate, Pick } from "./schemas";
 
-// Choice allows 255 options, one is kept for none.
-export const LIMIT = 254;
 const CLIP = 1500;
 
 export type ApplyOptions = Options & { confirm?: number };

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wxt",
+    "dev": "wxt 2>&1 | node scripts/plain.mjs",
     "build": "wxt build",
     "test": "vitest run",
     "typecheck": "wxt prepare && tsc --noEmit",

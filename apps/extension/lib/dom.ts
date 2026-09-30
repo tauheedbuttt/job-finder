@@ -1,4 +1,5 @@
-import { LIMIT, type Block, type Candidate } from "@job-finder/core";
+import type { Block, Candidate } from "@job-finder/core";
+import { LIMIT } from "@job-finder/core/limits";
 
 export type Scan<T> = { data: T[]; elements: Map<string, Element> };
 
