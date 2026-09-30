@@ -88,8 +88,25 @@ button:disabled {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+.on-dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .on-dark {
+    display: block;
+  }
+
+  .on-light {
+    display: none;
+  }
 }
 
 .tools {

@@ -1,4 +1,6 @@
 import { ArrowClockwise, ArrowUpRight, CaretRight, GearSix, Translate, WarningCircle, X } from "@phosphor-icons/react";
+import dark from "@/assets/mark-dark.svg";
+import light from "@/assets/mark-light.svg";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { STEPS, analyze, type Result } from "@/lib/analyze";
 import type { Applied, Message } from "@/lib/messages";
@@ -73,7 +75,11 @@ export default function App() {
   return (
     <div className="shell">
       <header className="bar">
-        <span className="brand">Job Finder</span>
+        <span className="brand">
+          <img className="mark on-dark" src={dark} alt="" width={16} height={16} />
+          <img className="mark on-light" src={light} alt="" width={16} height={16} />
+          Job Finder
+        </span>
         <div className="tools">
           <button
             className="icon"
