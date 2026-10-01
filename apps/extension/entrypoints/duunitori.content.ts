@@ -1,5 +1,5 @@
-import { cached, cards, judge, place, remember, retitle, title } from "@/lib/badge";
-import { pill, type Pill } from "@/lib/pill";
+import { cached, cards, judge, place, remember, retitle, title, type Result } from "@/lib/badge";
+import { row, type Row } from "@/lib/pill";
 import { relayed } from "@/lib/relay";
 import { load } from "@/lib/settings";
 import { trace } from "@/lib/trace";
@@ -13,46 +13,46 @@ export default defineContentScript({
     const opts = { base: settings.url, fetch: relayed, thresholds: settings };
     const session = crypto.randomUUID();
     const seen = new WeakSet<Element>();
-    const pills = new Set<Pill>();
+    const rows = new Set<Row>();
     const urls = new WeakMap<Element, string>();
     let offline: string | null = null;
 
     const down = () => {
       offline = `Translator offline at ${settings.url}. Start it, then reload.`;
-      for (const p of pills) if (p.state === "loading") p.set("error", offline);
+      for (const r of rows) if (r.busy()) r.fail(offline);
     };
 
     const check = async (card: Element, url: string) => {
-      const p = pill();
-      pills.add(p);
-      place(card, p.el);
-      const done = (verdict: Awaited<ReturnType<typeof judge>>) => {
+      const r = row();
+      rows.add(r);
+      place(card, r.el);
+      const done = (result: Result) => {
         // Finnish-required jobs leave the list entirely.
-        if (verdict === "yes") {
-          pills.delete(p);
+        if (result.finnish === "yes") {
+          rows.delete(r);
           card.remove();
-        } else p.set(verdict);
+        } else r.show(result);
       };
       const hit = await cached(url);
       if (hit) return done(hit);
-      if (offline) return p.set("error", offline);
+      if (offline) return r.fail(offline);
       let html: string;
       try {
         const res = await relayed(url);
         if (!res.ok) throw new Error(`Page ${res.status}`);
         html = await res.text();
       } catch (err) {
-        return p.set("error", err instanceof Error ? err.message : String(err));
+        return r.fail(err instanceof Error ? err.message : String(err));
       }
-      if (offline) return p.set("error", offline);
+      if (offline) return r.fail(offline);
       try {
-        const verdict = await judge(html, { ...opts, headers: trace("list-card", session, url) });
-        await remember(url, verdict);
-        done(verdict);
+        const result = await judge(html, { ...opts, headers: trace("list-card", session, url) });
+        await remember(url, result);
+        done(result);
       } catch (err) {
         // Relay turns an unreachable translator into a TypeError.
         if (err instanceof TypeError) down();
-        p.set("error", offline ?? (err instanceof Error ? err.message : String(err)));
+        r.fail(offline ?? (err instanceof Error ? err.message : String(err)));
       }
     };
 

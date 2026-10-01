@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cached, cards, judge, place, remember, retitle, title } from "../lib/badge";
-import { pill } from "../lib/pill";
+import { pill, row } from "../lib/pill";
 import { pool } from "../lib/pool";
 
 const fixture = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
@@ -25,31 +25,31 @@ function jev(p: number) {
 }
 
 describe("judge", () => {
-  it("uses the JSON-LD description directly and runs one fast Finnish check", async () => {
+  it("uses the JSON-LD description directly and runs one fast check", async () => {
     const mock = jev(0.92);
     const out = await judge(fixture("duunitori.html"), { fetch: mock.fetch });
-    expect(out).toBe("yes");
+    expect(out).toEqual({ finnish: "yes", experience: "yes" });
     expect(mock.calls).toHaveLength(1);
     const [check] = mock.calls;
-    expect(Object.keys(check!.questions)).toEqual(["requires_finnish"]);
+    expect(Object.keys(check!.questions)).toEqual(["requires_finnish", "requires_experience"]);
     expect(check!.state.text).toContain("sujuva suomen kielen taito suullisesti ja kirjallisesti");
     expect(check!.state.text).not.toContain("Duunitori Oy");
   });
 
   it("asks Jev to pick when the page has no JSON-LD", async () => {
     const mock = jev(0.1);
-    expect(await judge(fixture("plain.html"), { fetch: mock.fetch })).toBe("no");
+    expect(await judge(fixture("plain.html"), { fetch: mock.fetch })).toEqual({ finnish: "no", experience: "no" });
     expect(mock.calls).toHaveLength(2);
     expect(Object.keys(mock.calls[0]!.questions)).toEqual(["description"]);
   });
 
   it("maps a low score to no", async () => {
-    expect(await judge(fixture("duunitori.html"), { fetch: jev(0.1).fetch })).toBe("no");
+    expect(await judge(fixture("duunitori.html"), { fetch: jev(0.1).fetch })).toEqual({ finnish: "no", experience: "no" });
   });
 
   it("ends unclear without any Jev call when the page has no description", async () => {
     const mock = jev(0.9);
-    expect(await judge(fixture("nonjob.html"), { fetch: mock.fetch })).toBe("unclear");
+    expect(await judge(fixture("nonjob.html"), { fetch: mock.fetch })).toEqual({ finnish: "unclear", experience: "unclear" });
     expect(mock.calls).toHaveLength(0);
   });
 
@@ -78,13 +78,18 @@ describe("cache", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("returns a fresh verdict per job URL", async () => {
-    await remember("https://duunitori.fi/tyopaikat/tyo/a", "no", 1000);
-    expect(await cached("https://duunitori.fi/tyopaikat/tyo/a", 2000)).toBe("no");
+    await remember("https://duunitori.fi/tyopaikat/tyo/a", { finnish: "no", experience: "yes" }, 1000);
+    expect(await cached("https://duunitori.fi/tyopaikat/tyo/a", 2000)).toEqual({ finnish: "no", experience: "yes" });
     expect(await cached("https://duunitori.fi/tyopaikat/tyo/b", 2000)).toBeNull();
   });
 
+  it("treats an entry without experience as a miss", async () => {
+    store["badge:https://duunitori.fi/tyopaikat/tyo/a"] = { verdict: "no", at: 1000 };
+    expect(await cached("https://duunitori.fi/tyopaikat/tyo/a", 2000)).toBeNull();
+  });
+
   it("drops a verdict older than a day", async () => {
-    await remember("https://duunitori.fi/tyopaikat/tyo/a", "yes", 0);
+    await remember("https://duunitori.fi/tyopaikat/tyo/a", { finnish: "yes", experience: "no" }, 0);
     expect(await cached("https://duunitori.fi/tyopaikat/tyo/a", 24 * 60 * 60 * 1000)).toBeNull();
     expect(store).toEqual({});
   });
@@ -155,6 +160,30 @@ describe("pill", () => {
     expect(label().textContent).toBe("Unclear");
     p.set("error", "Translator offline");
     expect([label().textContent, label().title, p.state]).toEqual(["Check failed", "Translator offline", "error"]);
+  });
+});
+
+describe("row", () => {
+  const labels = (r: ReturnType<typeof row>) => [r.finnish, r.experience].map((p) => p.el.shadowRoot!.querySelector("span")!.textContent);
+
+  it("shows Finnish and experience side by side", () => {
+    const r = row();
+    expect(labels(r)).toEqual(["Checking Finnish…", "Checking experience…"]);
+    expect(r.busy()).toBe(true);
+    r.show({ finnish: "no", experience: "yes" });
+    expect(labels(r)).toEqual(["No Finnish", "Experience required"]);
+    r.show({ finnish: "unclear", experience: "no" });
+    expect(labels(r)).toEqual(["Unclear", "No experience needed"]);
+    r.show({ finnish: "no", experience: "unclear" });
+    expect(labels(r)[1]).toBe("Experience unclear");
+    expect(r.busy()).toBe(false);
+  });
+
+  it("fails both pills with one detail", () => {
+    const r = row();
+    r.fail("Translator offline");
+    expect(labels(r)).toEqual(["Check failed", "Check failed"]);
+    expect(r.experience.el.shadowRoot!.querySelector("span")!.title).toBe("Translator offline");
   });
 });
 

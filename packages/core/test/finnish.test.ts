@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAP, checkFinnish, checkFinnishFast } from "../src/index";
+import { CAP, checkFast, checkFinnish } from "../src/index";
 import { noul, transport } from "./mock";
 
 const sentences = [
@@ -119,20 +119,21 @@ describe("checkFinnish chunking", () => {
   });
 });
 
-describe("checkFinnishFast", () => {
-  const one = (p: number) => () => ({ requires_finnish: noul(p) });
+describe("checkFast", () => {
+  const two = (fi: number, ex = 0.1) => () => ({ requires_finnish: noul(fi), requires_experience: noul(ex) });
 
-  it("sends one request with raw text and only requires_finnish", async () => {
-    const mock = transport(one(0.9));
-    const out = await checkFinnishFast({ text: "Edellytämme sujuvaa suomen kieltä." }, { fetch: mock.fetch });
+  it("asks Finnish and experience in one request on raw text", async () => {
+    const mock = transport(two(0.9, 0.8));
+    const out = await checkFast({ text: "Edellytämme sujuvaa suomen kieltä." }, { fetch: mock.fetch });
     expect(mock.calls).toHaveLength(1);
     const { state, questions } = mock.calls[0]!.body;
     expect(state).toEqual({ text: "Edellytämme sujuvaa suomen kieltä." });
-    expect(Object.keys(questions)).toEqual(["requires_finnish"]);
-    expect(questions.requires_finnish.type).toBe("noul");
+    expect(Object.keys(questions)).toEqual(["requires_finnish", "requires_experience"]);
     expect(JSON.stringify(questions.requires_finnish.instructions)).toContain("explicitly ask for Finnish language skill");
     expect(JSON.stringify(questions.requires_finnish.instructions)).toContain("written in Finnish is not evidence");
-    expect(out).toEqual({ verdict: "yes", score: 0.9 });
+    expect(JSON.stringify(questions.requires_experience.instructions)).toContain("prior work experience");
+    expect(JSON.stringify(questions.requires_experience.instructions)).toContain("eduksi");
+    expect(out).toEqual({ finnish: { verdict: "yes", score: 0.9 }, experience: { verdict: "yes", score: 0.8 } });
   });
 
   it.each([
@@ -140,18 +141,19 @@ describe("checkFinnishFast", () => {
     [0.3, "no"],
     [0.5, "unclear"],
   ])("maps score %s to %s with default thresholds", async (p, verdict) => {
-    const out = await checkFinnishFast({ text: "x" }, { fetch: transport(one(p)).fetch });
-    expect(out.verdict).toBe(verdict);
+    const out = await checkFast({ text: "x" }, { fetch: transport(two(p, p)).fetch });
+    expect(out.finnish.verdict).toBe(verdict);
+    expect(out.experience.verdict).toBe(verdict);
   });
 
   it("honours custom thresholds", async () => {
-    const out = await checkFinnishFast({ text: "x" }, { fetch: transport(one(0.25)).fetch, thresholds: { no: 0.2 } });
-    expect(out.verdict).toBe("unclear");
+    const out = await checkFast({ text: "x" }, { fetch: transport(two(0.25)).fetch, thresholds: { no: 0.2 } });
+    expect(out.finnish.verdict).toBe("unclear");
   });
 
   it("truncates long text to the cap", async () => {
-    const mock = transport(one(0.1));
-    await checkFinnishFast({ text: "a".repeat(CAP + 500) }, { fetch: mock.fetch });
+    const mock = transport(two(0.1));
+    await checkFast({ text: "a".repeat(CAP + 500) }, { fetch: mock.fetch });
     expect((mock.calls[0]!.body.state as { text: string }).text).toHaveLength(CAP);
   });
 });

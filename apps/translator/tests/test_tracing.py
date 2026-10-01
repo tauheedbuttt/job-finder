@@ -6,6 +6,7 @@ import translate_server as server
 
 def test_names_each_jev_call_by_its_question():
     assert tracing.name({"requires_finnish": {}}) == "finnish-fast"
+    assert tracing.name({"requires_finnish": {}, "requires_experience": {}}) == "finnish-fast"
     assert tracing.name({"requires_finnish": {}, "fi_s0": {}, "en_s0": {}}) == "finnish-sentences"
     assert tracing.name({"description": {}}) == "pick-description"
     assert tracing.name({"apply": {}}) == "pick-apply"

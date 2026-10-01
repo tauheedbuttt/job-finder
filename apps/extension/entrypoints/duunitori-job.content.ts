@@ -1,7 +1,7 @@
 import { cached, judge, remember, suffix } from "@/lib/badge";
 import { button } from "@/lib/button";
 import { english, heading, root } from "@/lib/jd";
-import { pill } from "@/lib/pill";
+import { row } from "@/lib/pill";
 import { relayed } from "@/lib/relay";
 import { load } from "@/lib/settings";
 import { trace } from "@/lib/trace";
@@ -20,24 +20,24 @@ export default defineContentScript({
 
     const h1 = document.querySelector("h1");
     if (h1) {
-      const p = pill();
-      h1.after(p.el);
+      const r = row();
+      h1.after(r.el);
       const name = h1.textContent?.replace(/\s+/g, " ").trim() ?? "";
       if (name) void tr([name]).then(([en]) => suffix(h1, en ?? "")).catch(() => undefined);
       void (async () => {
         const hit = await cached(url);
-        if (hit) return p.set(hit);
+        if (hit) return r.show(hit);
         try {
-          const verdict = await judge(html, {
+          const result = await judge(html, {
             base: settings.url,
             fetch: relayed,
             thresholds: settings,
             headers: trace("detail-card", crypto.randomUUID(), url),
           });
-          await remember(url, verdict);
-          p.set(verdict);
+          await remember(url, result);
+          r.show(result);
         } catch (err) {
-          p.set("error", reason(err));
+          r.fail(reason(err));
         }
       })();
     }

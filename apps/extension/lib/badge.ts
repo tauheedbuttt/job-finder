@@ -1,32 +1,36 @@
-import { checkFinnishFast, pickDescription, type FinnishOptions, type Verdict } from "@job-finder/core";
+import { checkFast, pickDescription, type FinnishOptions, type Verdict } from "@job-finder/core";
 import { scanBlocks } from "./dom";
 
-export type Badge = Verdict["verdict"] | "loading" | "error";
+export type Level = Verdict["verdict"];
+export type Badge = Level | "loading" | "error";
+export type Result = { finnish: Level; experience: Level };
 
 const TTL = 24 * 60 * 60 * 1000;
 const key = (url: string) => `badge:${url}`;
 
 // JSON-LD is taken as is, Jev picks only when there is none; no description ends unclear.
-export async function judge(html: string, opts: FinnishOptions): Promise<Verdict["verdict"]> {
+export async function judge(html: string, opts: FinnishOptions): Promise<Result> {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const { data } = scanBlocks(doc);
   const jsonld = data.find((b) => b.source === "jsonld");
   const id = jsonld ? jsonld.id : (await pickDescription(data, opts)).id;
   const block = data.find((b) => b.id === id);
-  if (!block) return "unclear";
-  return (await checkFinnishFast({ text: block.text }, opts)).verdict;
+  if (!block) return { finnish: "unclear", experience: "unclear" };
+  const { finnish, experience } = await checkFast({ text: block.text }, opts);
+  return { finnish: finnish.verdict, experience: experience.verdict };
 }
 
-export async function cached(url: string, now = Date.now()): Promise<Verdict["verdict"] | null> {
-  const got = (await browser.storage.local.get(key(url)))[key(url)] as { verdict: Verdict["verdict"]; at: number } | undefined;
+// Entries from before the experience pill lack it and count as a miss.
+export async function cached(url: string, now = Date.now()): Promise<Result | null> {
+  const got = (await browser.storage.local.get(key(url)))[key(url)] as (Partial<Result> & { at: number }) | undefined;
   if (!got) return null;
-  if (now - got.at < TTL) return got.verdict;
+  if (now - got.at < TTL && got.finnish && got.experience) return { finnish: got.finnish, experience: got.experience };
   await browser.storage.local.remove(key(url));
   return null;
 }
 
-export async function remember(url: string, verdict: Verdict["verdict"], now = Date.now()): Promise<void> {
-  await browser.storage.local.set({ [key(url)]: { verdict, at: now } });
+export async function remember(url: string, result: Result, now = Date.now()): Promise<void> {
+  await browser.storage.local.set({ [key(url)]: { ...result, at: now } });
 }
 
 export function cards(root: ParentNode): Array<{ card: Element; url: string }> {

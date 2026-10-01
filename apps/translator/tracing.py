@@ -28,7 +28,7 @@ def enabled() -> bool:
 
 
 def name(questions: Mapping[str, object]) -> str:
-    keys = list(questions)
+    keys = [k for k in questions if k != "requires_experience"]
     if len(keys) > 1 and "requires_finnish" in keys:
         return "finnish-sentences"
     if len(keys) == 1:

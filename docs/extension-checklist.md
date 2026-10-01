@@ -26,3 +26,5 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 - [ ] Click "Translate" next to Työpaikkakuvaus. JD turns English, layout kept. "Show original" restores Finnish.
 - [ ] Restore original before panel Analyze, else highlights miss.
 - [ ] Stop translator on detail page. Button shows "Translator offline", pill shows error.
+- [ ] List and detail page: second pill shows "Experience required" (amber), "No experience needed" (green) or "Experience unclear".
+- [ ] Job with "kokemusta eduksi" only: not "Experience required".

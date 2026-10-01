@@ -67,6 +67,8 @@ export const finnish = z.object({
 
 export const verdict = finnish.pick({ verdict: true, score: true });
 
+export const fast = z.object({ finnish: verdict, experience: verdict });
+
 export const candidate = z.object({
   id: z.string(),
   tag: z.string(),
@@ -93,6 +95,7 @@ export type Thresholds = z.infer<typeof thresholds>;
 export type Span = z.infer<typeof span>;
 export type Finnish = z.infer<typeof finnish>;
 export type Verdict = z.infer<typeof verdict>;
+export type Fast = z.infer<typeof fast>;
 export type Candidate = z.infer<typeof candidate>;
 export type Block = z.infer<typeof block>;
 export type Pick = z.infer<typeof pick>;

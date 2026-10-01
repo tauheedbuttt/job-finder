@@ -1,5 +1,5 @@
 import { jev, type Options } from "./jev";
-import { thresholds as limits, type Finnish, type NoulQuestion, type Sentence, type Span, type Thresholds, type Verdict } from "./schemas";
+import { thresholds as limits, type Finnish, type NoulQuestion, type Sentence, type Span, type Fast, type Thresholds, type Verdict } from "./schemas";
 
 export type FinnishOptions = Options & { thresholds?: Partial<Thresholds> };
 
@@ -67,11 +67,25 @@ const fast: NoulQuestion = {
 // Keeps one list-mode request small; Finnish demands sit early in most JDs.
 export const CAP = 6000;
 
-export async function checkFinnishFast(input: { text: string }, options: FinnishOptions = {}): Promise<Verdict> {
+// Stated demands only; experience as an advantage still lets a newcomer apply.
+const experience: NoulQuestion = {
+  type: "noul",
+  instructions: {
+    question: "Does this job require prior work experience in this role or field?",
+    input: "`text` is a job description in its original language, possibly cut at the end.",
+    note: "Only count text that demands experience, such as years of experience or 'kokemusta edellytetään'. Experience named only as an advantage ('eduksi', 'nice to have'), trainee, summer job, entry level or 'no experience needed' is not a demand.",
+  },
+  criteria: {
+    true: "The text states that prior experience in this kind of work is required.",
+    false: "The text does not demand prior experience, or says it is optional or not needed.",
+  },
+};
+
+export async function checkFast(input: { text: string }, options: FinnishOptions = {}): Promise<Fast> {
   const t = limits.parse(options.thresholds ?? {});
-  const { answers } = await jev({ text: input.text.slice(0, CAP) }, { requires_finnish: fast }, options);
-  const score = answers.requires_finnish.noul;
-  return { verdict: score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear", score };
+  const level = (score: number): Verdict => ({ verdict: score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear", score });
+  const { answers } = await jev({ text: input.text.slice(0, CAP) }, { requires_finnish: fast, requires_experience: experience }, options);
+  return { finnish: level(answers.requires_finnish.noul), experience: level(answers.requires_experience.noul) };
 }
 
 // Keeps each request small; every chunk gets the whole-JD question too.
