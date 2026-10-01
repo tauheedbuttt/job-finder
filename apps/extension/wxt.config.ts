@@ -4,8 +4,8 @@ export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   manifest: {
     name: "Job Finder",
-    description: "Side panel that checks if a job needs Finnish and finds the apply button.",
-    permissions: ["sidePanel", "storage", "scripting"],
+    description: "Checks duunitori jobs for Finnish and experience, translates titles and descriptions.",
+    permissions: ["storage"],
     host_permissions: ["<all_urls>"],
     action: { default_title: "Job Finder" },
   },

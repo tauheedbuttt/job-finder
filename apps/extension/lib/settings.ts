@@ -1,8 +1,8 @@
 import { BASE, thresholds } from "@job-finder/core";
 
-export type Settings = { url: string; yes: number; no: number; span: number };
+export type Settings = { url: string; yes: number; no: number; span: number; hideExperienced: boolean };
 
-export const defaults: Settings = { url: BASE, ...thresholds.parse({}) };
+export const defaults: Settings = { url: BASE, ...thresholds.parse({}), hideExperienced: false };
 
 export async function load(): Promise<Settings> {
   const got = await browser.storage.local.get("settings");
@@ -11,4 +11,10 @@ export async function load(): Promise<Settings> {
 
 export async function save(settings: Settings): Promise<void> {
   await browser.storage.local.set({ settings });
+}
+
+export function watch(fn: (settings: Settings) => void): void {
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) fn({ ...defaults, ...(changes.settings.newValue as Partial<Settings> | undefined) });
+  });
 }

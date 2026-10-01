@@ -1,6 +1,6 @@
 const SIZES = [16, 32, 48, 128];
 
-// The service worker cannot read the browser theme, so the panel sets the toolbar icon.
+// The service worker cannot read the browser theme, so the popup sets the toolbar icon.
 export function syncIcon(): void {
   const query = matchMedia("(prefers-color-scheme: dark)");
   const apply = () => {

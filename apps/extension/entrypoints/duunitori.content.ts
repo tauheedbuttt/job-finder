@@ -1,7 +1,8 @@
 import { cached, cards, judge, place, remember, retitle, title, type Result } from "@/lib/badge";
+import { hides, sift } from "@/lib/filter";
 import { row, type Row } from "@/lib/pill";
 import { relayed } from "@/lib/relay";
-import { load } from "@/lib/settings";
+import { load, watch } from "@/lib/settings";
 import { trace } from "@/lib/trace";
 import { translate } from "@/lib/translate";
 
@@ -9,16 +10,17 @@ export default defineContentScript({
   matches: ["*://duunitori.fi/tyopaikat*", "*://www.duunitori.fi/tyopaikat*"],
   excludeMatches: ["*://duunitori.fi/tyopaikat/tyo/*", "*://www.duunitori.fi/tyopaikat/tyo/*"],
   async main() {
-    const settings = await load();
+    let settings = await load();
     const opts = { base: settings.url, fetch: relayed, thresholds: settings };
     const session = crypto.randomUUID();
     const seen = new WeakSet<Element>();
     const rows = new Set<Row>();
     const urls = new WeakMap<Element, string>();
+    const results = new Map<HTMLElement, Result>();
     let offline: string | null = null;
 
     const down = () => {
-      offline = `Translator offline at ${settings.url}. Start it, then reload.`;
+      offline = `Translator offline at ${opts.base}. Start it, then reload.`;
       for (const r of rows) if (r.busy()) r.fail(offline);
     };
 
@@ -31,7 +33,11 @@ export default defineContentScript({
         if (result.finnish === "yes") {
           rows.delete(r);
           card.remove();
-        } else r.show(result);
+        } else {
+          r.show(result);
+          results.set(card as HTMLElement, result);
+          sift(card as HTMLElement, hides(result, settings));
+        }
       };
       const hit = await cached(url);
       if (hit) return done(hit);
@@ -61,7 +67,7 @@ export default defineContentScript({
       const titles = list.map(title);
       if (offline || !titles.some(Boolean)) return;
       try {
-        const en = await translate(titles, settings.url, relayed);
+        const en = await translate(titles, opts.base, relayed);
         list.forEach((card, i) => retitle(card, en[i] ?? ""));
       } catch {
         return;
@@ -88,6 +94,14 @@ export default defineContentScript({
         view.observe(card);
       }
     };
+
+    watch((next) => {
+      settings = next;
+      for (const [card, result] of results) {
+        if (card.isConnected) sift(card, hides(result, settings));
+        else results.delete(card);
+      }
+    });
 
     scan();
     new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });

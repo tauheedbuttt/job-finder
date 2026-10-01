@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-apps/extension   WXT + React side panel, any site
+apps/extension   WXT + React popup, duunitori content scripts
 apps/translator  Python FastAPI, own server, port 8790
 apps/crawler     later
 packages/core    TS: Jev client, zod schemas, text utils
@@ -21,7 +21,7 @@ packages/core    TS: Jev client, zod schemas, text utils
 - `JOBFINDER_MODEL_CONFIG` default `models.json`.
 
 ## Data flow
-Page -> content script -> candidates (code) -> side panel -> translator `/translate` (local) and `/jev` (proxy to api.typesafe.ai) -> answers -> highlight on page + panel badge + apply button.
+Duunitori page -> content script -> relay fetch -> translator `/translate` (local) and `/jev` (proxy to api.typesafe.ai) -> pills, titles, filters. Popup writes settings to storage.
 
 ## Jev
 - `POST https://api.typesafe.ai/v1/systemone`, Bearer, model `jev-latest`.
