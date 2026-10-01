@@ -40,12 +40,16 @@ export function title(card: Element): string {
   return card.querySelector(".job-box__title")?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 }
 
-// Adds the English title after the original, only when translation changed it.
 export function retitle(card: Element, en: string): void {
   const el = card.querySelector(".job-box__title");
-  if (!el || el.querySelector("[data-jf-en]")) return;
+  if (el) suffix(el, en);
+}
+
+// Adds the English title after the original, only when translation changed it.
+export function suffix(el: Element, en: string): void {
+  if (el.querySelector("[data-jf-en]")) return;
   const flat = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
-  if (!en.trim() || flat(en) === flat(title(card))) return;
+  if (!en.trim() || flat(en) === flat(el.textContent ?? "")) return;
   const span = document.createElement("span");
   span.dataset.jfEn = "";
   span.textContent = ` - ${en.trim()}`;

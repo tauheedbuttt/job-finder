@@ -22,3 +22,7 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 - [ ] Scroll list. New cards get pills. Reload page. Cached pills show instantly.
 - [ ] Card linking to external site: grey or verdict, no crash.
 - [ ] Stop translator on list page. Pills show error, no retry storm.
+- [ ] Duunitori detail page: h1 shows `original - English` and a pill under it. Same verdict as list card.
+- [ ] Click "Translate" next to Työpaikkakuvaus. JD turns English, layout kept. "Show original" restores Finnish.
+- [ ] Restore original before panel Analyze, else highlights miss.
+- [ ] Stop translator on detail page. Button shows "Translator offline", pill shows error.

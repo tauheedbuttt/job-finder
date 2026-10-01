@@ -14,13 +14,14 @@ Side panel on right, works on any site. Manual job exploration.
 - Panel top: badge. Red = Finnish required. Green = not required. Grey = unclear. Loading state.
 - Panel: apply button (opens href, or focuses element if not link), translated JD, toggle original/translated.
 - Page highlights: red for `fi_` spans, green for `en_` spans. Match sentence text in DOM via Range. Clear on re-run. Click panel badge to jump to first evidence.
+- Translate cache: memory `Map` plus `chrome.storage.local`, key `tr:<text>`, TTL 30 days. Shared by panel, list and detail scripts. Missing storage falls back to memory. Reason: detail page reuses list title and earlier JD translations, no second translator call.
 - Settings: translator URL (default `http://localhost:8790`), thresholds. Stored in `chrome.storage.local`.
 - Offline translator: `/jev` is also down, so show one clear error and stop. No partial run. Reason: Jev is proxied by the translator.
 - Host permissions: all urls, needed for any-site panel.
 - Tracing headers on every Jev call. Panel: one session per Analyze run, flow `panel-analyze`. List: one session per page load, one trace per card, flow `list-card`. Reason: Langfuse token spend per feature.
 
 ## List badges (duunitori list pages)
-- Content script on `duunitori.fi/tyopaikat/*` list pages only. Not on detail pages.
+- Content script on `duunitori.fi/tyopaikat/*` list pages only. Detail pages get own script, see "Detail page" below.
 - Per job card, inject a pill under the title row. Shadow DOM, so site CSS does not leak.
 - Only cards in view (`IntersectionObserver`). Scroll loads more.
 - Background worker `fetch(url)` per card, pool of 5. Host permission gives no CORS. No Playwright, no tab opened.
@@ -31,6 +32,19 @@ Side panel on right, works on any site. Manual job exploration.
 - Translator offline: one error state on pills, no retry loop.
 - Reason: list mode favours speed. Yes/no only, no highlights.
 
+## Detail page (duunitori)
+Reason: user wants list-level info on detail page without opening side panel, plus in-place English JD.
+- Separate content script on `duunitori.fi/tyopaikat/tyo/*`. List script stays excluded there.
+- Title: translate `h1` text via `/translate`. Append ` - English` span, same rule as list `retitle` (skip when same, no duplicate). Reuse helper, pass element not card.
+- Pill: same `pill()` under `h1`. Run `judge` on current `document.documentElement.outerHTML`, no fetch. Same `cached`/`remember` key per URL, so list and detail share verdict. Verdict yes shows red "Finnish required" pill. Page never removed. Trace flow `detail-card`, one session per page load.
+- Verdict and title reuse list work via shared storage. Detail page calls Jev only on a cache miss.
+- Translate button: shadow DOM button right of `Työpaikkakuvaus` `h2` (first `h2` before `.description-box`). Label "Translate".
+- Click: target `.description--jobentry` (fallback: `.description-box`). Save original `innerHTML`. Collect leaf blocks (`p, li, h1-h6, td, dd`, plus `div` with no block children) that have text. Per block: `splitSentences`, translate all sentences in one batched `translate` call, join per block, set block `textContent`. Inline bold/links inside a block are lost. Reason: sentence-level translate keeps model input short, block-level replace keeps layout.
+- Button states: "Translate" -> "Translating…" (disabled) -> "Show original". "Show original" restores saved `innerHTML`, label back to "Translate". Second translate hits translate cache, instant.
+- Translator offline: button shows "Translator offline", title holds URL hint. Pill error state same as list. No retry loop.
+- Side panel unaffected. Panel highlights match original text, so user restores original before Analyze. Note in checklist.
+
 ## Tests
 - Unit: candidate builders on saved HTML fixtures. Highlight range mapping.
+- Unit: detail page fixture. Leaf block collection, translate replace, restore original. Title span added once.
 - Manual checklist in `docs/`.
