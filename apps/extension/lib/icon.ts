@@ -1,7 +1,8 @@
 const SIZES = [16, 32, 48, 128];
 
-// The service worker cannot read the browser theme, so the popup sets the toolbar icon.
+// Chrome service worker cannot read the theme, so the popup sets the icon. Firefox uses theme_icons.
 export function syncIcon(): void {
+  if (import.meta.env.FIREFOX) return;
   const query = matchMedia("(prefers-color-scheme: dark)");
   const apply = () => {
     const dir = query.matches ? "icon" : "icon-light";

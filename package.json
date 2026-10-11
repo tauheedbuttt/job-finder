@@ -6,6 +6,7 @@
     "dev": "nx run-many -t dev -p translator extension --parallel=2 --outputStyle=stream",
     "dev:translator": "nx run translator:dev",
     "dev:extension": "nx run extension:dev",
+    "dev:extension:firefox": "nx run extension:dev:firefox",
     "test": "nx run-many -t test",
     "typecheck": "nx run-many -t typecheck"
   },

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { grant, granted } from "@/lib/access";
 import { defaults, load, save, type Settings } from "@/lib/settings";
 
 const FIELDS = [
@@ -8,9 +9,11 @@ const FIELDS = [
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(defaults);
+  const [access, setAccess] = useState(true);
 
   useEffect(() => {
     void load().then(setSettings);
+    void granted().then(setAccess);
   }, []);
 
   async function store(next: Settings) {
@@ -20,6 +23,16 @@ export default function App() {
 
   return (
     <main className="popup">
+      {!access && (
+        <section className="banner">
+          <p>Job Finder needs access to all sites to check job pages.</p>
+          <div className="row">
+            <button className="ghost" onClick={() => void grant().then(setAccess).catch(() => undefined)}>
+              Grant access
+            </button>
+          </div>
+        </section>
+      )}
       <section>
         <h2>Filters</h2>
         <label className="toggle">

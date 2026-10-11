@@ -169,3 +169,15 @@ h2 {
 .ghost:hover {
   background: var(--surface);
 }
+
+.banner {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--red-tint);
+  color: var(--red);
+  font-size: 13px;
+}
+
+.banner p {
+  margin: 0;
+}

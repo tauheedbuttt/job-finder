@@ -47,8 +47,25 @@ Reason: user wants list-level info on detail page, plus in-place English JD.
 - Button states: "Translate" -> "Translating…" (disabled) -> "Show original". "Show original" restores saved `innerHTML`, label back to "Translate". Second translate hits translate cache, instant.
 - Translator offline: button shows "Translator offline", title holds URL hint. Pill error state same as list. No retry loop.
 
+## Firefox build (Zen)
+Reason: user wants same extension in Zen browser. Zen is Firefox-based, so one Firefox MV3 build covers it.
+- One codebase. WXT builds both: `wxt build -b firefox --mv3`. No fork, no per-browser entrypoints.
+- Code already uses `browser.*` from WXT. Keep it. No raw `chrome.*` anywhere. Reason: WXT polyfill is what makes Firefox work.
+- Package scripts: `dev:firefox` (`wxt -b firefox --mv3`), `build:firefox`, `zip:firefox` (`wxt zip -b firefox --mv3`). Root gets `pnpm dev:extension:firefox`. Chrome scripts unchanged.
+- Manifest, Firefox only (WXT per-browser manifest function):
+  - `browser_specific_settings.gecko.id`: `job-finder@tauheed.dev`. Fixed id. Reason: storage survives reinstall, signing needs it.
+  - `gecko.strict_min_version`: `128.0`. Reason: MV3 host permissions granted at install from 127 onward.
+  - `gecko.data_collection_permissions`: `{ required: ["none"] }`. Reason: AMO signing now requires the field. Nothing leaves the machine except to user-set translator URL.
+- Background: Firefox MV3 runs event page, not service worker. WXT handles it. `relay` pool and `runtime.onMessage` return-true reply already work there.
+- Host permissions: Firefox may still show `<all_urls>` as optional. On every popup open, if `permissions.contains({ origins: ["<all_urls>"] })` false, show one banner with "Grant access" button calling `permissions.request`. Reason: without it relay fetch fails with CORS and every pill errors.
+- Toolbar icon: Firefox only, add `action.theme_icons` (light/dark pairs from `public/icon` and `public/icon-light`). `syncIcon` stays for Chrome. Reason: Firefox picks icon from theme itself, no popup open needed.
+- `web-ext.config.ts` stays `disabled: true`. Dev in Zen: load `.output/firefox-mv3-dev/manifest.json` via `about:debugging#/runtime/this-firefox` > "Load Temporary Add-on". Gone on browser restart.
+- Permanent install in Zen: sign unlisted on AMO. `pnpm sign:firefox` runs `web-ext sign --channel=unlisted` with AMO key and secret from env (`WEB_EXT_API_KEY`, `WEB_EXT_API_SECRET`, template in `apps/extension/.env.example`). Version starts `0.1.0`, bump before each sign. Reason: AMO rejects a version it already signed. Output `.xpi`, drag into Zen. Reason: release Firefox builds reject unsigned add-ons. Unlisted = not public, auto signed.
+- Checklist in `docs/extension-checklist.md` gets Firefox section: list pills, detail translate, popup toggle live, grant banner.
+
 ## Tests
 - Unit: experience filter. `yes` card hidden, toggle off unhides, `unclear` stays. Finnish `yes` removal checked by manual checklist.
+- Unit: host access. `granted` false when missing, `grant` requests `<all_urls>`.
 - Unit: settings load fills `hideExperienced` false when missing.
 - Unit: detail page fixture. Leaf block collection, translate replace, restore original. Title span added once.
 - Manual checklist in `docs/`.
