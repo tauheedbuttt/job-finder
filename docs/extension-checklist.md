@@ -19,7 +19,7 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 - [ ] Toggle off. Hidden cards come back, no refetch.
 
 ## Firefox / Zen
-Setup: `pnpm dev:extension:firefox`. Zen: `about:debugging#/runtime/this-firefox`, "Load Temporary Add-on", pick `apps/extension/.output/firefox-mv3-dev/manifest.json`. Gone on restart.
+Setup: `pnpm dev:firefox` (translator plus Firefox build). Zen: `about:debugging#/runtime/this-firefox`, "Load Temporary Add-on", pick `apps/extension/.output/firefox-mv3-dev/manifest.json`. Gone on restart.
 
 - [ ] Popup opens. If site access missing, red banner with "Grant access". Click, approve. Reopen popup, banner gone.
 - [ ] Toolbar icon matches Zen theme, light and dark, without opening popup.

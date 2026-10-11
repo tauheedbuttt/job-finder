@@ -51,7 +51,7 @@ Reason: user wants list-level info on detail page, plus in-place English JD.
 Reason: user wants same extension in Zen browser. Zen is Firefox-based, so one Firefox MV3 build covers it.
 - One codebase. WXT builds both: `wxt build -b firefox --mv3`. No fork, no per-browser entrypoints.
 - Code already uses `browser.*` from WXT. Keep it. No raw `chrome.*` anywhere. Reason: WXT polyfill is what makes Firefox work.
-- Package scripts: `dev:firefox` (`wxt -b firefox --mv3`), `build:firefox`, `zip:firefox` (`wxt zip -b firefox --mv3`). Root gets `pnpm dev:extension:firefox`. Chrome scripts unchanged.
+- Package scripts: `dev:firefox` (`wxt -b firefox --mv3`), `build:firefox`, `zip:firefox` (`wxt zip -b firefox --mv3`). Root gets `pnpm dev:firefox` (translator plus Firefox build, via `BROWSER=firefox` read by extension `dev`) and `pnpm dev:extension:firefox`. Reason: extension-only dev left translator off, every Jev call failed. Chrome scripts unchanged.
 - Manifest, Firefox only (WXT per-browser manifest function):
   - `browser_specific_settings.gecko.id`: `job-finder@tauheed.dev`. Fixed id. Reason: storage survives reinstall, signing needs it.
   - `gecko.strict_min_version`: `128.0`. Reason: MV3 host permissions granted at install from 127 onward.
