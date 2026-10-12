@@ -22,20 +22,45 @@ Reason: board holds ~800 listings from many sites. Titles alone miss many traine
 - Our filters stack with site search (AND). We never touch site inputs.
 
 ## Sidebar UI
-- Shadow DOM host, `position: fixed`, left edge = column left minus sidebar width minus 24 px, top 96 px, width 220 px, max height viewport minus 120, own scroll. Recompute on `resize`.
-- Gutter under 244 px: sidebar collapses to a "Filters" button fixed top-left. Click opens same panel as a drawer over the page. Esc or outside click closes.
-- Look: Linear-like. Font inherits site (Inter). 13 px rows, 28 px row height, muted labels, count right-aligned in tabular nums, 6 px radius, hover tint, no heavy borders. Checkbox as small square with check. Group title 11 px uppercase muted with chevron to collapse. Light and dark follow `prefers-color-scheme`.
-- Header: "Filters" plus "Reset" text button when any filter on. Under header: "Showing N of M".
+Reason for rewrite: first build read as a foreign widget. Washed-out text, invisible header, chips with no shape, native grey checkboxes, top not aligned with page. Sidebar must look like part of Agilefant.
+
+### Placement
+- Shadow DOM host, `position: fixed`, width 232 px. Left edge = column left minus 232 minus 32 px gap. Recompute on `resize`.
+- Top aligns with the site search input top (measure `input` rect, fallback 173 px). Header sits on that line, so sidebar and list start together. Max height viewport minus top minus 24, own scroll, scrollbar hidden until hover.
+- Gutter under 264 px: collapse to a "Filters" button fixed top-left, same style as site "Refresh" (icon + text, muted). Click opens same panel as drawer, `--background` fill, right border, soft shadow. Esc or outside click closes.
+
+### Tokens
+- Use the site's own CSS variables. They are on `:root` as HSL triples and inherit into shadow DOM: `--foreground`, `--muted-foreground`, `--primary`, `--accent`, `--border`, `--background`, `--radius`. Write `hsl(var(--primary))`. Fallback values in the same `var()` for safety. No own palette, no `prefers-color-scheme` block. Reason: matches site exactly, follows any site theme change.
+- Font inherits (Inter). Sizes: header 14 px semibold, option 14 px regular, group title 12 px medium, meta 12 px. Same as site rows (14 px).
+- Text colors: option label `--foreground`, count and meta `--muted-foreground`, group title `--muted-foreground`. Never lighter than muted. Reason: first build used faded greys, unreadable.
+
+### Rhythm
+- One left edge. Group titles, options, chips, footer all start at x = 0 inside the sidebar. Only "Include unclear" indents, 24 px, under its parent. No other indents.
+- Option row 32 px high, 8 px horizontal padding, `calc(var(--radius) - 2px)` radius, whole row clickable. Hover: `hsl(var(--accent) / .6)` fill. Count right-aligned, tabular nums.
+- 20 px between groups. 8 px between group title and first option. No divider lines.
+
+### Controls
+- Checkbox: 16 px custom square, 1.5 px `--border` stroke, 4 px radius. Checked: `--primary` fill, white check. Focus ring `--ring`. No native checkbox look.
+- Quick chips: pill, 28 px high, 10 px padding, 1 px `--border` stroke, `--background` fill, `--foreground` text, wrap with 6 px gap. Hover `--accent` fill. On: `--accent` fill, `--primary` text and stroke. Reason: first build chips had no shape and read as plain text.
+- Group title: sentence case ("Role type"), not uppercase. Chevron 12 px on the right, rotates on collapse. Reason: site uses uppercase only for its one page label, our many uppercase titles shouted.
+- Counts before labeling: show a 12 px spinner or `-`, never `0`. Reason: `0` reads as "no trainee jobs".
+- Selected option count turns `--foreground` weight 500, so active filters stand out.
+
+### Content
+- Header row: "Filters" left. Right side "Reset" (text button, `--primary`) only when any filter on. Under it, meta line "787 jobs" or "42 of 787 jobs" when filtered.
 - Groups, top to bottom:
-  - **Quick**: chips, one click toggles. "Trainee", "Closing in 7 days", "Added this week". Chip state mirrors the matching checkbox below.
-  - **Role type** (Jev): "Trainee / graduate" checkbox with count. Sub-option "Include unclear", default off. Progress line while labeling: thin bar plus "Labeling 120 / 787".
-  - **Deadline**: "Has deadline", "Closing in 7 days". Plain date math on `deadline`.
-  - **Added**: "This week", "Last 30 days". On `created`.
-  - **Source**: one checkbox per link host, sorted by count, top 8 then "Show all". None checked = all sources.
-- Footer: "Clear label cache" text button plus cache line "812 labels cached". Click turns button into inline "Clear 812 labels? Clear / Cancel". No `window.confirm`. Reason: dialogs block page and extension tooling.
-- After clear: labels gone from memory and storage, Jev filters show loading again, labeling restarts only if a Jev filter is on.
-- Filter state saved in `browser.storage.local` key `agilefant:filters`. Restored on load.
+  - **Quick**: chips. "Trainee", "Closing soon", "New this week". Chip state mirrors matching option below. No group title, chips sit right under header. Reason: quick picks need no label.
+  - **Role type** (Jev): "Trainee / graduate" with count. Sub-option "Include unclear", default off. While labeling: 2 px `--primary` bar under the option plus meta "Checking 120 of 787". Bar fades out when done.
+  - **Deadline**: "Has deadline", "Closing in 7 days". Plain date math on `deadline`. Collapsed by default.
+  - **Added**: "This week", "Last 30 days". On `created`. Collapsed by default.
+  - **Source**: one option per link host, `www.` stripped, sorted by count, top 6 then "Show 26 more" text button (`--muted-foreground`, hover `--foreground`). None checked = all sources.
+- Footer, 24 px above, small meta style: "812 labels cached · Clear". "Clear" is a text button. Click swaps line to "Clear 812 labels? Clear / Cancel", Clear in `--primary`. No `window.confirm`. Reason: dialogs block page and extension tooling. Footer hidden when 0 labels cached.
+
+### Behaviour
+- After clear: labels gone from memory and storage, Jev counts show spinner again, labeling restarts only if a Jev filter is on.
+- Filter state and collapsed groups saved in `browser.storage.local` key `agilefant:filters`. Restored on load.
 - Counts per option = rows matching that option with all other groups applied. Reason: ecom facet behaviour, user sees what a click will give.
+- Motion: 120 ms ease on hover fill, chevron, collapse height. Nothing else animates.
 
 ## Label engine (generic, reused by later Jev filters)
 - Registry in `lib/labels.ts`: `Label = { name, version, question: NoulQuestion }`. First entry `trainee`, version 1.

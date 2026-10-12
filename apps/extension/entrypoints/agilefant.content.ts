@@ -1,4 +1,15 @@
-import { blank, counts, flip, items, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
+import {
+  blank,
+  counts,
+  flip,
+  items,
+  sources,
+  style,
+  today,
+  visible,
+  type Filters,
+  type Item,
+} from "@/lib/agilefant";
 import { cache, labels, run } from "@/lib/labels";
 import { relayed } from "@/lib/relay";
 import { load } from "@/lib/settings";
@@ -25,12 +36,15 @@ function ready(): Promise<boolean> {
   });
 }
 
-async function restore(): Promise<Filters> {
+type Saved = Partial<Filters> & { folded?: string[] };
+
+async function restore(): Promise<{ filters: Filters; folded?: string[] }> {
   try {
-    const got = (await browser.storage.local.get(KEY))[KEY] as Partial<Filters> | undefined;
-    return { ...blank, ...got };
+    const { folded, ...got } = ((await browser.storage.local.get(KEY))[KEY] ??
+      {}) as Saved;
+    return { filters: { ...blank, ...got }, folded };
   } catch {
-    return { ...blank };
+    return { filters: { ...blank } };
   }
 }
 
@@ -46,7 +60,13 @@ export default defineContentScript({
     // Every row ever seen, so rows hidden before a site search or Refresh stay hidden on remount.
     const known = new Map<string, Item>();
     let rows = items(document);
-    let filters = await restore();
+    const saved = await restore();
+    let filters = saved.filters;
+    let folded = saved.folded;
+    const persist = () =>
+      void browser.storage.local
+        .set({ [KEY]: { ...filters, folded } })
+        .catch(() => undefined);
     let offline = false;
     let running = false;
     let again = false;
@@ -60,28 +80,41 @@ export default defineContentScript({
     const remember = (list: Item[]) => list.forEach((i) => known.set(i.id, i));
     remember(rows);
 
-    const bar = sidebar({
-      toggle: (key) => change(flip(filters, key)),
-      reset: () => change({ ...blank }),
-      clear: async () => {
-        epoch++;
-        running = false;
-        await memo.clear();
-        update();
-        void label();
+    const bar = sidebar(
+      {
+        toggle: (key) => change(flip(filters, key)),
+        reset: () => change({ ...blank }),
+        clear: async () => {
+          epoch++;
+          running = false;
+          await memo.clear();
+          update();
+          void label();
+        },
+        fold: (keys) => {
+          folded = keys;
+          persist();
+        },
       },
-    });
+      folded,
+    );
     document.body.append(bar.host);
     bar.place();
 
-    const ctx = () => ({ today: today(), verdict: (id: string) => memo.get(id, trainee)?.verdict, offline });
+    const ctx = () => ({
+      today: today(),
+      verdict: (id: string) => memo.get(id, trainee)?.verdict,
+      offline,
+    });
 
     function draw() {
       frame = 0;
       const c = ctx();
       const all = [...known.values()];
       const keep = new Set(visible(all, filters, c).map((i) => i.id));
-      veil.textContent = style(all.filter((i) => !keep.has(i.id)).map((i) => i.id));
+      veil.textContent = style(
+        all.filter((i) => !keep.has(i.id)).map((i) => i.id),
+      );
       const done = all.filter((i) => memo.get(i.id, trainee)).length;
       bar.render({
         filters,
@@ -92,6 +125,7 @@ export default defineContentScript({
         progress: running ? { done, total: all.length } : null,
         offline,
         cached: memo.size(),
+        unlabeled: rows.some((i) => !memo.get(i.id, trainee)),
       });
     }
 
@@ -106,7 +140,7 @@ export default defineContentScript({
         running = false;
       }
       filters = next;
-      void browser.storage.local.set({ [KEY]: filters }).catch(() => undefined);
+      persist();
       update();
       void label();
     }
@@ -149,7 +183,8 @@ export default defineContentScript({
       clearTimeout(pending);
       pending = setTimeout(() => {
         const next = items(document);
-        if (next.map((i) => i.id).join() === rows.map((i) => i.id).join()) return;
+        if (next.map((i) => i.id).join() === rows.map((i) => i.id).join())
+          return;
         const fresh = next.some((i) => !known.has(i.id));
         rows = next;
         remember(next);
@@ -158,7 +193,10 @@ export default defineContentScript({
         if (fresh) void label();
       }, 300);
     };
-    new MutationObserver(rescan).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(rescan).observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
 
     update();
     void label();
