@@ -1,4 +1,4 @@
-import { checkFast, pickDescription, type FinnishOptions, type Verdict } from "@job-finder/core";
+import { checkFast, pickDescription, type FinnishOptions, type Options, type Verdict } from "@job-finder/core";
 import { scanBlocks } from "./dom";
 
 export type Level = Verdict["verdict"];
@@ -8,15 +8,20 @@ export type Result = { finnish: Level; experience: Level };
 const TTL = 24 * 60 * 60 * 1000;
 const key = (url: string) => `badge:${url}`;
 
-// JSON-LD is taken as is, Jev picks only when there is none; no description ends unclear.
-export async function judge(html: string, opts: FinnishOptions): Promise<Result> {
+// JSON-LD is taken as is, Jev picks only when there is none.
+export async function extract(html: string, opts: Options): Promise<string | null> {
   const doc = new DOMParser().parseFromString(html, "text/html");
   const { data } = scanBlocks(doc);
   const jsonld = data.find((b) => b.source === "jsonld");
   const id = jsonld ? jsonld.id : (await pickDescription(data, opts)).id;
-  const block = data.find((b) => b.id === id);
-  if (!block) return { finnish: "unclear", experience: "unclear" };
-  const { finnish, experience } = await checkFast({ text: block.text }, opts);
+  return data.find((b) => b.id === id)?.text ?? null;
+}
+
+// No description ends unclear.
+export async function judge(html: string, opts: FinnishOptions): Promise<Result> {
+  const text = await extract(html, opts);
+  if (text === null) return { finnish: "unclear", experience: "unclear" };
+  const { finnish, experience } = await checkFast({ text }, opts);
   return { finnish: finnish.verdict, experience: experience.verdict };
 }
 

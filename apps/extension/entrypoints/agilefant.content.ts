@@ -1,0 +1,166 @@
+import { blank, counts, flip, items, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
+import { cache, labels, run } from "@/lib/labels";
+import { relayed } from "@/lib/relay";
+import { load } from "@/lib/settings";
+import { sidebar } from "@/lib/sidebar";
+
+const KEY = "agilefant:filters";
+const WAIT = 15000;
+
+// Resolves once the SPA renders its first row, false after the cap.
+function ready(): Promise<boolean> {
+  return new Promise((done) => {
+    if (document.querySelector("[data-item-id]")) return done(true);
+    const watch = new MutationObserver(() => {
+      if (!document.querySelector("[data-item-id]")) return;
+      watch.disconnect();
+      clearTimeout(timer);
+      done(true);
+    });
+    watch.observe(document.documentElement, { childList: true, subtree: true });
+    const timer = setTimeout(() => {
+      watch.disconnect();
+      done(false);
+    }, WAIT);
+  });
+}
+
+async function restore(): Promise<Filters> {
+  try {
+    const got = (await browser.storage.local.get(KEY))[KEY] as Partial<Filters> | undefined;
+    return { ...blank, ...got };
+  } catch {
+    return { ...blank };
+  }
+}
+
+export default defineContentScript({
+  matches: ["https://agilefant.org/p/*"],
+  async main() {
+    if (!(await ready())) return;
+    const settings = await load();
+    const session = crypto.randomUUID();
+    const memo = cache();
+    await memo.load();
+    const { trainee } = labels;
+    // Every row ever seen, so rows hidden before a site search or Refresh stay hidden on remount.
+    const known = new Map<string, Item>();
+    let rows = items(document);
+    let filters = await restore();
+    let offline = false;
+    let running = false;
+    let again = false;
+    let epoch = 0;
+    let frame = 0;
+
+    const veil = document.createElement("style");
+    veil.dataset.jfAgilefant = "";
+    document.head.append(veil);
+
+    const remember = (list: Item[]) => list.forEach((i) => known.set(i.id, i));
+    remember(rows);
+
+    const bar = sidebar({
+      toggle: (key) => change(flip(filters, key)),
+      reset: () => change({ ...blank }),
+      clear: async () => {
+        epoch++;
+        running = false;
+        await memo.clear();
+        update();
+        void label();
+      },
+    });
+    document.body.append(bar.host);
+    bar.place();
+
+    const ctx = () => ({ today: today(), verdict: (id: string) => memo.get(id, trainee)?.verdict, offline });
+
+    function draw() {
+      frame = 0;
+      const c = ctx();
+      const all = [...known.values()];
+      const keep = new Set(visible(all, filters, c).map((i) => i.id));
+      veil.textContent = style(all.filter((i) => !keep.has(i.id)).map((i) => i.id));
+      const done = all.filter((i) => memo.get(i.id, trainee)).length;
+      bar.render({
+        filters,
+        counts: counts(rows, filters, c),
+        sources: sources(rows),
+        shown: rows.filter((i) => keep.has(i.id)).length,
+        total: rows.length,
+        progress: running ? { done, total: all.length } : null,
+        offline,
+        cached: memo.size(),
+      });
+    }
+
+    function update() {
+      if (!frame) frame = requestAnimationFrame(draw);
+    }
+
+    function change(next: Filters) {
+      // Turning the Jev filter off stops spending on it.
+      if (filters.trainee && !next.trainee) {
+        epoch++;
+        running = false;
+      }
+      filters = next;
+      void browser.storage.local.set({ [KEY]: filters }).catch(() => undefined);
+      update();
+      void label();
+    }
+
+    // Labels only run while a Jev filter is on, and only for cache misses.
+    async function label() {
+      if (!filters.trainee || offline) return;
+      if (running) {
+        again = true;
+        return;
+      }
+      const list = [...known.values()];
+      if (list.every((i) => memo.get(i.id, trainee))) return;
+      const mine = ++epoch;
+      running = true;
+      again = false;
+      update();
+      try {
+        await run(list, {
+          label: trainee,
+          cache: memo,
+          opts: { base: settings.url, fetch: relayed, thresholds: settings },
+          page: relayed,
+          session,
+          url: location.href.split("#")[0]!,
+          mark: update,
+          stop: () => epoch !== mine || offline,
+        });
+      } catch (err) {
+        if (err instanceof TypeError) offline = true;
+      }
+      if (epoch !== mine) return;
+      running = false;
+      update();
+      if (again) void label();
+    }
+
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const rescan = () => {
+      clearTimeout(pending);
+      pending = setTimeout(() => {
+        const next = items(document);
+        if (next.map((i) => i.id).join() === rows.map((i) => i.id).join()) return;
+        const fresh = next.some((i) => !known.has(i.id));
+        rows = next;
+        remember(next);
+        bar.place();
+        update();
+        if (fresh) void label();
+      }, 300);
+    };
+    new MutationObserver(rescan).observe(document.body, { childList: true, subtree: true });
+
+    update();
+    void label();
+  },
+});
