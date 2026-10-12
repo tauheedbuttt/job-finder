@@ -2,8 +2,10 @@
 
 Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://extensions`, dev mode on, "Load unpacked" `apps/extension/.output/chrome-mv3-dev`. Dev build hot reloads.
 
-- [ ] Click toolbar icon. Popup opens with "Hide experienced roles" toggle and Settings.
-- [ ] Change translator URL and thresholds. Reopen popup. Values kept.
+- [ ] Click toolbar icon. Popup opens on Filters with "Hide experienced roles" toggle and gear top-right.
+- [ ] Click gear. Settings view with back arrow. Change translator URL and both sliders. Value shows right of label.
+- [ ] Drag `no` up to `yes`. It stops one step below. Drag `yes` down. It stops one step above `no`.
+- [ ] Reset restores defaults, toggle untouched. Reopen popup. Opens on Filters, values kept.
 - [ ] Duunitori list page: each visible card gets a pill. Loading, then verdict. Finnish-required cards vanish.
 - [ ] Finnish card title shows `original - English`. English title unchanged.
 - [ ] Scroll list. New cards get pills. Reload page. Cached pills show instantly.

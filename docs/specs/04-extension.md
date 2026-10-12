@@ -7,9 +7,11 @@ Reason for change: side panel unused, user wants a popup with toggles instead.
 ## Decisions
 - WXT + React + TS. Manifest v3.
 - No side panel. Delete `entrypoints/sidepanel`, any-site `entrypoints/content.ts`, `lib/analyze.ts`, `lib/highlight.ts`, `lib/tab.ts`, panel message types in `lib/messages.ts` (keep `Relay`). Drop `sidePanel` and `scripting` permissions. Background keeps only relay pool. Core `pickApply`, `checkFinnish` and extension `scanCandidates` stay. Reason: crawler may reuse, cheap to keep.
-- Toolbar icon opens popup (`entrypoints/popup`, `action.default_popup`). Popup sections:
-  - Filters: toggle "Hide experienced roles". Default off.
-  - Settings: translator URL (default `http://localhost:8790`), thresholds `yes` and `no`. `span` dropped from UI. Reason: highlights gone.
+- Toolbar icon opens popup (`entrypoints/popup`, `action.default_popup`). Two views, one shown at a time:
+  - Filters view (default): header "Filters" with gear icon button top-right. Toggle "Hide experienced roles". Default off.
+  - Settings view: own component `Settings.tsx`. Gear click opens it, header gets back arrow plus "Settings". Translator URL (default `http://localhost:8790`) as text input. Thresholds `yes` and `no` as sliders 0 to 1, step 0.05, value shown right of label. `yes` slider min clamps to `no` + 0.05, `no` max to `yes` - 0.05. Reset button. `span` dropped from UI. Reason: highlights gone.
+  - Reason for views: user wants settings out of the filter screen, sliders over number inputs.
+  - Popup reopens on Filters view. No view memory.
 - All values in `chrome.storage.local` key `settings`. `Settings` gains `hideExperienced: boolean`. Popup saves on change, no save button.
 - List script reads settings at start and listens `storage.onChanged`. Toggle applies live, no reload. URL and thresholds apply on page reload. Detail script reads once, no toggle there.
 - Translate cache: memory `Map` plus `chrome.storage.local`, key `tr:<text>`, TTL 30 days. Shared by list and detail scripts. Missing storage falls back to memory.

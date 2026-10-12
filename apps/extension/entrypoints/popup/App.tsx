@@ -1,22 +1,19 @@
 import { useEffect, useState } from "react";
 import { grant, granted } from "@/lib/access";
-import { defaults, load, save, type Settings } from "@/lib/settings";
-
-const FIELDS = [
-  { key: "yes", label: "Finnish required at score from" },
-  { key: "no", label: "Not required at score up to" },
-] as const;
+import { defaults, load, save, type Settings as Values } from "@/lib/settings";
+import Settings from "./Settings";
 
 export default function App() {
-  const [settings, setSettings] = useState<Settings>(defaults);
+  const [settings, setSettings] = useState<Values>(defaults);
   const [access, setAccess] = useState(true);
+  const [view, setView] = useState<"filters" | "settings">("filters");
 
   useEffect(() => {
     void load().then(setSettings);
     void granted().then(setAccess);
   }, []);
 
-  async function store(next: Settings) {
+  async function store(next: Values) {
     setSettings(next);
     await save(next);
   }
@@ -33,46 +30,31 @@ export default function App() {
           </div>
         </section>
       )}
-      <section>
-        <h2>Filters</h2>
-        <label className="toggle">
-          <span>Hide experienced roles</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={settings.hideExperienced}
-            onChange={(e) => store({ ...settings, hideExperienced: e.target.checked })}
-          />
-        </label>
-        <p className="hint">Hides duunitori cards that require prior experience.</p>
-      </section>
-
-      <section className="settings">
-        <h2>Settings</h2>
-        <label>
-          <span>Translator URL</span>
-          <input value={settings.url} spellCheck={false} onChange={(e) => store({ ...settings, url: e.target.value })} />
-        </label>
-        {FIELDS.map(({ key, label }) => (
-          <label key={key}>
-            <span>{label}</span>
+      {view === "settings" ? (
+        <Settings settings={settings} store={(next) => void store(next)} back={() => setView("filters")} />
+      ) : (
+        <section>
+          <header className="head">
+            <h2>Filters</h2>
+            <button className="icon end" aria-label="Settings" onClick={() => setView("settings")}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+          </header>
+          <label className="toggle">
+            <span>Hide experienced roles</span>
             <input
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              value={settings[key]}
-              onChange={(e) => e.target.value !== "" && store({ ...settings, [key]: Number(e.target.value) })}
+              type="checkbox"
+              role="switch"
+              checked={settings.hideExperienced}
+              onChange={(e) => store({ ...settings, hideExperienced: e.target.checked })}
             />
           </label>
-        ))}
-        <p className="hint">Saved as you type. URL and thresholds apply on page reload.</p>
-        <div className="row">
-          <button className="ghost" onClick={() => store({ ...defaults, hideExperienced: settings.hideExperienced })}>
-            Reset
-          </button>
-        </div>
-      </section>
+          <p className="hint">Hides duunitori cards that require prior experience.</p>
+        </section>
+      )}
     </main>
   );
 }

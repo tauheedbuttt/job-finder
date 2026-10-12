@@ -181,3 +181,57 @@ h2 {
 .banner p {
   margin: 0;
 }
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+}
+
+.icon:hover {
+  background: var(--surface);
+  color: var(--fg);
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon.end {
+  margin-left: auto;
+}
+
+.settings .line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings output {
+  color: var(--fg);
+  font-family: "Geist Mono Variable", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings input[type="range"] {
+  padding: 0;
+  border: 0;
+  background: none;
+  accent-color: var(--fg);
+}

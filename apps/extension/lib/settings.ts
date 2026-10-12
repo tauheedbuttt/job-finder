@@ -18,3 +18,12 @@ export function watch(fn: (settings: Settings) => void): void {
     if (area === "local" && changes.settings) fn({ ...defaults, ...(changes.settings.newValue as Partial<Settings> | undefined) });
   });
 }
+
+export const STEP = 0.05;
+
+const round = (n: number) => Math.round(n * 100) / 100;
+
+// Slider limits that keep yes at least one step above no.
+export function bounds(t: Pick<Settings, "yes" | "no">) {
+  return { yes: { min: round(t.no + STEP), max: 1 }, no: { min: 0, max: round(t.yes - STEP) } };
+}
