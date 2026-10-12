@@ -33,13 +33,17 @@ function loaded(id: number): Promise<void> {
   });
 }
 
+export const web = (url: string) => /^https?:\/\//i.test(url);
+
 type Sender = { tab?: { windowId?: number; index?: number } };
 
-// User clicked Try in tab: one inactive tab next to the board tab, one at a time.
+// User clicked Try in tab or Process all: inactive tabs next to the board tab, at most 5 at once.
 export function renderer() {
-  const limit = pool(1);
+  const limit = pool(5);
 
   async function one(url: string, from: Sender): Promise<Rendered> {
+    // Firefox resolves "" or a relative url against the background page and opens it in a tab.
+    if (!web(url)) return { ok: false, error: "no link" };
     let timer: ReturnType<typeof setTimeout> | undefined;
     const at = from.tab?.index;
     const made = browser.tabs.create({ url, active: false, windowId: from.tab?.windowId, ...(at === undefined ? {} : { index: at + 1 }) });

@@ -2,7 +2,8 @@ import { ROWS } from "./agilefant";
 import type { Level } from "./badge";
 import type { Entry, Issue } from "./labels";
 
-export type Known = { entries: Record<string, Entry>; notes: Issue[]; trying?: boolean };
+// Link false: row has no web link, so no Try in tab.
+export type Known = { entries: Record<string, Entry>; notes: Issue[]; trying?: boolean; link?: boolean };
 
 const INFO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`;
 
@@ -53,7 +54,7 @@ export function lines(k: Known): { labels: string[]; issues: string[] } {
 export function tip(k: Known, id = ""): string {
   const l = lines(k);
   const part = (title: string, list: string[]) => (list.length ? `<b>${title}</b>${list.map((s) => `<div>${esc(s)}</div>`).join("")}` : "");
-  const failed = k.entries.finnish?.src === "none";
+  const failed = k.entries.finnish?.src === "none" && k.link !== false;
   const button = failed ? `<button type="button" data-jf-try${k.trying ? " disabled" : ""}>${k.trying ? "Trying…" : "Try in tab"}</button>` : "";
   const body = part("Labels", l.labels) + part("Issues", l.issues) + button;
   return body && id ? `<b>Job</b><div data-jf-id>${esc(id.split("::").pop()!)}</div>${body}` : body;

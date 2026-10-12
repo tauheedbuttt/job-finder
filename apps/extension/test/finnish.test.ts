@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { CAP } from "@job-finder/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "../lib/agilefant";
-import { adapt, answer, deep, grade, MIN, order, plain, retry, run, source, wipe, type Deps, type Got } from "../lib/finnish";
+import { adapt, answer, deep, lacks, redo, TABS, grade, MIN, order, plain, retry, run, source, wipe, type Deps, type Got } from "../lib/finnish";
 import { cache, labels, type Issue, type Verdict } from "../lib/labels";
 import type { Rendered } from "../lib/messages";
 
@@ -45,7 +45,7 @@ function jev(p: number) {
   return { calls, fetch };
 }
 
-const item = (url: string, i = 0): Item => ({ id: `b::wi-${i}`, title: `Job ${i}`, url, alt: "", host: new URL(url).hostname, deadline: null, created: null });
+const item = (url: string, i = 0, link = url): Item => ({ id: `b::wi-${i}`, title: `Job ${i}`, url: link, alt: "", host: new URL(url).hostname, deadline: null, created: null });
 
 function deps(page: string | Error | number, p = 0.9) {
   const mock = jev(p);
@@ -131,6 +131,21 @@ describe("try in tab", () => {
     c.put("b::wi-0", labels.finnish, got.finnish);
     expect(c.get("b::wi-0", labels.finnish)?.src).toBe("tab");
     expect(store["jd:b::wi-0"]).toMatchObject({ src: "tab" });
+  });
+
+  it("fails a row with no link without a render, a fetch or a Jev call", async () => {
+    const { d, mock } = deps(LONG);
+    const render = vi.fn();
+    const got = pair(await retry(item("https://x.fi/1", 0, ""), [], old, render, { fetch: mock.fetch }));
+    expect(render).not.toHaveBeenCalled();
+    expect(got.finnish).toMatchObject({ verdict: "unclear", src: "none" });
+    expect(steps(got.finnish.issues)).toEqual([
+      ["fetch", "text too short"],
+      ["tab", "no link"],
+    ]);
+    expect(steps((await source("", d)).issues)).toEqual([["fetch", "no link"]]);
+    expect(d.page).not.toHaveBeenCalled();
+    expect(mock.calls).toHaveLength(0);
   });
 
   it("records a tab error and stays failed with no Jev call", async () => {
@@ -236,6 +251,70 @@ describe("jd cache", () => {
     const { d } = deps(SHELL);
     await check(item("https://jobs.example.fi/1"), d);
     expect(store["jd:b::wi-0"]).toBeUndefined();
+  });
+});
+
+describe("process all", () => {
+  it("runs at most 5 rows at once and marks each", async () => {
+    let now = 0;
+    let peak = 0;
+    const mark = vi.fn();
+    const ids = Array.from({ length: 12 }, (_, i) => `r${i}`);
+    await redo(
+      ids,
+      async () => {
+        peak = Math.max(peak, ++now);
+        await new Promise((go) => setTimeout(go, 5));
+        now--;
+      },
+      () => false,
+      mark,
+    );
+    expect(TABS).toBe(5);
+    expect(peak).toBe(5);
+    expect(mark).toHaveBeenCalledTimes(12);
+  });
+
+  it("starts no new row after stop and marks none late", async () => {
+    let halted = false;
+    const started: string[] = [];
+    const mark = vi.fn();
+    const ids = Array.from({ length: 12 }, (_, i) => `r${i}`);
+    await redo(
+      ids,
+      async (id) => {
+        started.push(id);
+        await new Promise((go) => setTimeout(go, 5));
+        halted = true;
+      },
+      () => halted,
+      mark,
+    );
+    expect(started).toHaveLength(5);
+    expect(mark).not.toHaveBeenCalled();
+  });
+
+  it("success leaves the failed state, a failure keeps its issues", async () => {
+    const { mock } = deps(LONG);
+    const c = cache();
+    await c.load();
+    const old: Issue[] = [{ step: "fetch", message: "HTTP 429", at: 1 }];
+    const rows = [item("https://jobs.example.fi/1", 0), item("https://jobs.example.fi/2", 1)];
+    for (const r of rows) c.put(r.id, labels.finnish, { verdict: "unclear", src: "none", issues: old });
+    const render = async (url: string): Promise<Rendered> => (url.endsWith("/1") ? { ok: true, html: LONG } : { ok: false, error: "timed out after 20 s" });
+    const attempt = async (id: string) => {
+      const r = rows.find((x) => x.id === id)!;
+      for (const [l, v] of await retry(r, lacks(id, c), c.get(id, labels.finnish)!.issues!, render, { fetch: mock.fetch })) c.put(id, l, v);
+    };
+    await redo(rows.map((r) => r.id), attempt, () => false, vi.fn());
+    expect(c.get("b::wi-0", labels.finnish)).toMatchObject({ src: "tab", verdict: "yes" });
+    expect(c.get("b::wi-0", labels.yoe)?.src).toBe("tab");
+    expect(c.get("b::wi-1", labels.finnish)).toMatchObject({ src: "none" });
+    expect(steps(c.get("b::wi-1", labels.finnish)!.issues)).toEqual([
+      ["fetch", "HTTP 429"],
+      ["tab", "timed out after 20 s"],
+    ]);
+    expect(mock.calls).toHaveLength(1);
   });
 });
 

@@ -17,6 +17,33 @@ const view: View = {
 };
 
 describe("sidebar", () => {
+  it("shows Process all in the failed view, Stop while running", () => {
+    const fix = vi.fn();
+    const halt = vi.fn();
+    const bar = sidebar({ toggle: vi.fn(), reset: vi.fn(), clear: vi.fn(), fold: vi.fn(), fix, halt });
+    const root = bar.host.shadowRoot!;
+    const failed = { ...view, filters: { ...blank, failed: true }, counts: { ...view.counts, failed: 3 } };
+    bar.render(view);
+    expect(root.querySelector('[data-act="fix"]')).toBeNull();
+    bar.render(failed);
+    const button = root.querySelector<HTMLButtonElement>('[data-act="fix"]')!;
+    expect(button.textContent).toBe("Process all 3");
+    expect(button.type).toBe("button");
+    expect(button.classList.contains("chip")).toBe(true);
+    expect([...root.querySelectorAll("button")].every((b) => b.type === "button")).toBe(true);
+    button.click();
+    expect(fix).toHaveBeenCalledOnce();
+    bar.render({ ...failed, offline: true });
+    expect(root.querySelector<HTMLButtonElement>('[data-act="fix"]')!.disabled).toBe(true);
+    bar.render({ ...failed, fixable: 0 });
+    expect(root.querySelector<HTMLButtonElement>('[data-act="fix"]')!.disabled).toBe(true);
+    bar.render({ ...failed, fixing: { done: 1, total: 3 } });
+    expect(root.textContent).toContain("Trying 1 of 3 in tabs");
+    expect(root.querySelector('[data-act="fix"]')).toBeNull();
+    root.querySelector<HTMLElement>('[data-act="halt"]')!.click();
+    expect(halt).toHaveBeenCalledOnce();
+  });
+
   it("sorts sources by shown count, hides zero unless checked, counts only hidden for more", () => {
     const names = ["a.fi", "b.fi", "c.fi", "d.fi", "e.fi", "f.fi", "g.fi", "h.fi", "z.fi", "y.fi"];
     const counts = Object.fromEntries(names.map((h, i) => [`host:${h}`, i < 8 ? i + 1 : 0]));

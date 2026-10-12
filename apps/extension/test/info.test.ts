@@ -94,4 +94,10 @@ describe("info", () => {
     expect(busy.textContent).toBe("Trying…");
     expect(busy.disabled).toBe(true);
   });
+
+  it("offers no Try in tab on a row with no link", () => {
+    const failed: Known = { entries: { finnish: { v: 1, verdict: "unclear", src: "none" } }, notes: [{ step: "tab", message: "no link", at }], link: false };
+    expect(tip(failed)).not.toContain("data-jf-try");
+    expect(tip(failed)).toContain("Tab · no link");
+  });
 });

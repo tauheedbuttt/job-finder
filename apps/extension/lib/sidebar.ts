@@ -9,6 +9,9 @@ export type View = {
   progress: { done: number; total: number } | null;
   finnish: { done: number; total: number } | null;
   seniority: { done: number; total: number } | null;
+  fixing?: { done: number; total: number } | null;
+  // Failed rows Process all can try: shown and with a link.
+  fixable?: number;
   offline: boolean;
   cached: number;
   unlabeled: boolean;
@@ -18,6 +21,8 @@ export type Actions = {
   toggle: (key: Key) => void;
   reset: () => void;
   clear: () => void;
+  fix?: () => void;
+  halt?: () => void;
   fold: (keys: string[]) => void;
 };
 
@@ -46,12 +51,16 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cu
 .title{font-weight:600}
 .link{color:${MUTED};font-size:12px;transition:color .12s ease}
 .link:hover{color:${FG}}
+.link:disabled{opacity:.5;cursor:default}
+.link:disabled:hover{color:${MUTED}}
 .reset{color:${PRIMARY};font-size:13px;font-weight:500}
 .reset:hover{color:${PRIMARY};text-decoration:underline;text-underline-offset:3px}
 .meta{margin:2px 0 0;padding:0 8px;color:${MUTED};font-size:12px;font-variant-numeric:tabular-nums}
 .chips{display:flex;flex-wrap:wrap;gap:6px;padding:12px 8px 0}
 .chip{height:28px;padding:0 10px;border-radius:999px;border:1px solid ${BORDER};background:${BG};color:${FG};font-size:13px;transition:background .12s ease,color .12s ease,border-color .12s ease}
 .chip:hover{background:${ACCENT}}
+.chip:disabled{opacity:.5;cursor:default;background:${BG}}
+.run{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .chip[aria-pressed=true]{background:${ACCENT};border-color:${PRIMARY};color:${PRIMARY}}
 .group{margin-top:20px}
 .fold{display:flex;align-items:center;justify-content:space-between;width:100%;height:24px;margin-bottom:8px;padding:0 8px;color:${MUTED};font-size:12px;font-weight:500;transition:color .12s ease}
@@ -111,6 +120,7 @@ export function sidebar(actions: Actions, shut: string[] = []) {
   panel.setAttribute("role", "complementary");
   panel.setAttribute("aria-label", "Filters");
   const open = document.createElement("button");
+  open.type = "button";
   open.className = "open";
   open.innerHTML = `${FUNNEL}Filters`;
   open.dataset.act = "open";
@@ -123,13 +133,13 @@ export function sidebar(actions: Actions, shut: string[] = []) {
   let last: View | null = null;
 
   const check = (key: Key, label: string, view: View, on: boolean) =>
-    `<button class="check" role="checkbox" aria-checked="${on}" data-act="toggle" data-key="${esc(key)}"><span class="box">${CHECK}</span><span class="label">${esc(label)}</span><span class="count">${view.counts[key] ?? 0}</span></button>`;
+    `<button type="button" class="check" role="checkbox" aria-checked="${on}" data-act="toggle" data-key="${esc(key)}"><span class="box">${CHECK}</span><span class="label">${esc(label)}</span><span class="count">${view.counts[key] ?? 0}</span></button>`;
 
-  const chip = (key: Key, label: string, on: boolean) => `<button class="chip" aria-pressed="${on}" data-act="toggle" data-key="${key}">${label}</button>`;
+  const chip = (key: Key, label: string, on: boolean) => `<button type="button" class="chip" aria-pressed="${on}" data-act="toggle" data-key="${key}">${label}</button>`;
 
   const group = (key: string, title: string, body: string) => {
     const closed = folded.has(key);
-    return `<section class="group"><button class="fold" aria-expanded="${!closed}" data-act="fold" data-key="${key}">${title}${CHEVRON}</button>${closed ? "" : body}</section>`;
+    return `<section class="group"><button type="button" class="fold" aria-expanded="${!closed}" data-act="fold" data-key="${key}">${title}${CHEVRON}</button>${closed ? "" : body}</section>`;
   };
 
   const progress = (v: View) => {
@@ -137,6 +147,17 @@ export function sidebar(actions: Actions, shut: string[] = []) {
     if (!v.progress) return "";
     const pct = v.progress.total ? Math.round((v.progress.done / v.progress.total) * 100) : 0;
     return `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div>Checking ${v.progress.done} of ${v.progress.total}</div>`;
+  };
+
+  // Process all lives in the failed view only; Stop while running.
+  const fix = (v: View) => {
+    if (!v.filters.failed) return "";
+    if (v.fixing) {
+      const pct = v.fixing.total ? Math.round((v.fixing.done / v.fixing.total) * 100) : 0;
+      return `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div><div class="run">Trying ${v.fixing.done} of ${v.fixing.total} in tabs<button type="button" class="chip" data-act="halt">Stop</button></div></div>`;
+    }
+    const n = v.fixable ?? v.counts.failed ?? 0;
+    return `<div class="progress"><button type="button" class="chip" data-act="fix"${v.offline || !n ? " disabled" : ""}>Process all ${n}</button></div>`;
   };
 
   // Finnish and seniority runs are not tied to a filter, so their state sits under the jobs line.
@@ -149,8 +170,8 @@ export function sidebar(actions: Actions, shut: string[] = []) {
   const foot = (v: View) => {
     if (!v.cached && !confirming) return "";
     const body = confirming
-      ? `Clear ${v.cached} labels? <button class="link danger" data-act="confirm">Clear</button><button class="link" data-act="cancel">Cancel</button>`
-      : `${v.cached} labels cached · <button class="link" data-act="clear">Clear</button>`;
+      ? `Clear ${v.cached} labels? <button type="button" class="link danger" data-act="confirm">Clear</button><button type="button" class="link" data-act="cancel">Cancel</button>`
+      : `${v.cached} labels cached · <button type="button" class="link" data-act="clear">Clear</button>`;
     return `<div class="foot">${body}</div>`;
   };
 
@@ -162,16 +183,17 @@ export function sidebar(actions: Actions, shut: string[] = []) {
     const now = root.activeElement instanceof HTMLElement && panel.contains(root.activeElement) ? root.activeElement : null;
     const focus = now ? `[data-act="${now.dataset.act}"]${now.dataset.key === undefined ? "" : `[data-key="${now.dataset.key}"]`}` : null;
     panel.innerHTML = [
-      `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
+      `<div class="head"><span class="title">Filters</span>${active(f) ? `<button type="button" class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       status(v),
       `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("developer", "Developer", f.developer)}${chip("week", "New this week", f.week)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
+      fix(v),
       progress(v),
       group(
         "source",
         "Source",
         top.map((h) => check(`host:${h}`, h.replace(/^www\./, ""), v, f.hosts.includes(h))).join("") +
-          (hidden > 0 ? `<button class="more" data-act="more">${all ? "Show less" : `Show ${hidden} more`}</button>` : ""),
+          (hidden > 0 ? `<button type="button" class="more" data-act="more">${all ? "Show less" : `Show ${hidden} more`}</button>` : ""),
       ),
       foot(v),
     ].join("");
@@ -191,6 +213,10 @@ export function sidebar(actions: Actions, shut: string[] = []) {
         return actions.toggle(key as Key);
       case "reset":
         return actions.reset();
+      case "fix":
+        return actions.fix?.();
+      case "halt":
+        return actions.halt?.();
       case "fold":
         folded.has(key) ? folded.delete(key) : folded.add(key);
         actions.fold([...folded]);

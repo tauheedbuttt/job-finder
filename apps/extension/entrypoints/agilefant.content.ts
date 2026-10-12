@@ -1,11 +1,11 @@
 import { blank, counts, flip, items, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
-import { deep, grade, missing, order, retry, run as scan, wipe } from "@/lib/finnish";
+import { deep, grade, lacks, missing, order, redo, retry, run as scan, wipe } from "@/lib/finnish";
 import { CSS as INFO, mark, tips, type Known } from "@/lib/info";
 import { cache, labels, run, type Issue } from "@/lib/labels";
 import type { Level } from "@/lib/badge";
 import { trace } from "@/lib/trace";
 import { relayed } from "@/lib/relay";
-import { rendered } from "@/lib/render";
+import { rendered, web } from "@/lib/render";
 import { CSS, decorate, KEY as GONE, kept, pick, toast, toolbar, type Removed } from "@/lib/removed";
 import { load } from "@/lib/settings";
 import { sidebar } from "@/lib/sidebar";
@@ -79,6 +79,9 @@ export default defineContentScript({
     let round = 0;
     // Seniority progress: rows done and rows in the current run.
     let ranked = { done: 0, total: 0 };
+    // Process all on the failed view: run id and progress.
+    let pass = 0;
+    let fixing: { done: number; total: number } | null = null;
 
     const veil = document.createElement("style");
     veil.dataset.jfAgilefant = "";
@@ -93,7 +96,15 @@ export default defineContentScript({
       {
         toggle: (key) => change(flip(filters, key)),
         reset: () => change({ ...blank }),
+        fix: () => void fix(),
+        halt: () => {
+          pass++;
+          fixing = null;
+          update();
+        },
         clear: async () => {
+          pass++;
+          fixing = null;
           epoch++;
           turn++;
           round++;
@@ -147,21 +158,26 @@ export default defineContentScript({
     });
     bar.place();
 
-    const facts = (id: string): Known => ({ entries: memo.row(id), notes: notes.get(id) ?? [], trying: trying.has(id) });
+    const NOLINK: Issue = { step: "tab", message: "no link", at: Date.now() };
+    // Failed rows with no web link get a "no link" note instead of Try in tab.
+    const facts = (id: string): Known => {
+      const link = web(known.get(id)?.url ?? "");
+      const own = notes.get(id) ?? [];
+      const note = !link && memo.get(id, finnish)?.src === "none" ? [...own, NOLINK] : own;
+      return { entries: memo.row(id), notes: note, trying: trying.has(id), link };
+    };
     const opts = () => ({ base: settings.url, fetch: relayed, thresholds: settings });
 
-    // Try in tab: result replaces the Finnish entry, old issues kept.
-    async function attempt(id: string) {
+    // Try in tab: result replaces the Finnish entry, old issues kept. Process all calls this per row; live false drops a late answer.
+    async function attempt(id: string, live = () => true) {
       const item = known.get(id);
-      if (!item || trying.has(id)) return;
+      if (!item || trying.has(id) || !live()) return;
       const mine = turn;
       trying.add(id);
       update();
       try {
-        // Retry asks every label the row lacks, so its JD goes out once.
-        const want = [labels.yoe, labels.developer, ...missing(id, memo), trainee].filter((l) => !memo.get(id, l));
-        const got = await retry(item, want, memo.get(id, finnish)?.issues ?? [], rendered, { ...opts(), headers: trace("agilefant-finnish", session, item.url) });
-        if (turn === mine) {
+        const got = await retry(item, lacks(id, memo), memo.get(id, finnish)?.issues ?? [], rendered, { ...opts(), headers: trace("agilefant-finnish", session, item.url) });
+        if (turn === mine && live()) {
           for (const [l, v] of got) memo.put(id, l, v);
           void assess();
         }
@@ -206,6 +222,8 @@ export default defineContentScript({
         progress: running ? { done, total: all.length } : null,
         finnish: checking ? { done: open.filter((i) => memo.get(i.id, finnish)).length, total: open.length } : null,
         seniority: ranking ? ranked : null,
+        fixing,
+        fixable: filters.failed ? broken().length : 0,
         offline,
         cached: memo.size(),
         unlabeled: live.some((i) => !memo.get(i.id, trainee)),
@@ -347,6 +365,35 @@ export default defineContentScript({
       ranking = false;
       update();
       if (extra) void assess();
+    }
+
+    // Failed rows shown in the failed view, minus rows already in a tab.
+    function broken(): Item[] {
+      const c = ctx();
+      return visible(kept([...known.values()], gone), { ...filters, failed: true }, c).filter((i) => c.failed(i.id) && !trying.has(i.id) && web(i.url));
+    }
+
+    // Process all: Try in tab for every shown failed row, 5 tabs at once.
+    async function fix() {
+      if (fixing || offline) return;
+      const list = broken();
+      if (!list.length) return;
+      const mine = ++pass;
+      fixing = { done: 0, total: list.length };
+      update();
+      const stop = () => pass !== mine || offline;
+      await redo(
+        list.map((i) => i.id),
+        (id) => attempt(id, () => !stop()),
+        stop,
+        () => {
+          if (fixing) fixing = { ...fixing, done: fixing.done + 1 };
+          update();
+        },
+      );
+      if (pass !== mine) return;
+      fixing = null;
+      update();
     }
 
     let pending: ReturnType<typeof setTimeout> | undefined;

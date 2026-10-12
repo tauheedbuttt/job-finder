@@ -3,6 +3,7 @@ import { host, type Item } from "./agilefant";
 import { cached, extract, remember } from "./badge";
 import { labels, level, type Asked, type Cache, type Entry, type Issue, type Verdict } from "./labels";
 import type { Rendered } from "./messages";
+import { web } from "./render";
 import { pool } from "./pool";
 import { trace, type Flow } from "./trace";
 
@@ -81,6 +82,7 @@ export async function read(body: string, opts: FinnishOptions): Promise<string> 
 
 // Fetch only; null text means the row fails with its issue and skips Jev.
 export async function source(url: string, d: Deps): Promise<Text> {
+  if (!web(url)) return { text: null, issues: [issue("fetch", "no link")] };
   let res: Response;
   try {
     res = await d.page(adapt(url));
@@ -188,6 +190,7 @@ export async function answer(item: Item, want: Asked[], d: Deps, bare = false): 
 export async function retry(item: Item, want: Asked[], old: Issue[], render: (url: string) => Promise<Rendered>, opts: FinnishOptions): Promise<Got> {
   const url = clean(item.url);
   const ask = [...new Set([finnish, experience, ...want])];
+  if (!web(url)) return fail([...old, issue("tab", "no link")]);
   const got = await render(url);
   if (!got.ok) return fail([...old, issue("tab", got.error)]);
   let text: string;
@@ -233,6 +236,11 @@ export function missing(id: string, c: Cache): Asked[] {
   return failed(id, c) ? want.filter((l) => !DEEP.includes(l)) : want;
 }
 
+// Try in tab asks every label the row lacks, so its JD goes out once.
+export function lacks(id: string, c: Cache): Asked[] {
+  return [yoe, developer, ...missing(id, c), trainee].filter((l) => !c.get(id, l));
+}
+
 // Trainee rides along free when a row gets a call anyway.
 export function wanted(id: string, c: Cache): Asked[] {
   const want = missing(id, c);
@@ -270,4 +278,20 @@ export async function run(list: Item[], r: Run): Promise<void> {
 // Seniority run: rows that still miss a label after the Finnish run.
 export async function grade(list: Item[], r: Run): Promise<void> {
   await sweep(list, r, "agilefant-seniority");
+}
+
+export const TABS = 5;
+
+// Process all: runs the single-row Try in tab for each row, 5 tabs at once; a stop starts no new row.
+export async function redo(ids: string[], attempt: (id: string) => Promise<void>, stop: () => boolean, mark: (id: string) => void): Promise<void> {
+  const one = pool(TABS);
+  await Promise.all(
+    ids.map((id) =>
+      one(async () => {
+        if (stop()) return;
+        await attempt(id);
+        if (!stop()) mark(id);
+      }),
+    ),
+  );
 }

@@ -134,12 +134,22 @@ Changed: auto render window removed. Reason: popping a window on page load made 
 Reason: lets user test failed portals by hand and see if a render path is worth building.
 - Failed rows (`src: "none"`) show a "Try in tab" text button at the bottom of the info tooltip, `--primary`, 12 px.
 - Click: background opens `tabs.create({ url, active: false, windowId: <board tab window> })` in the user's current window, next to the board tab. No new window.
-- Tab: wait `status: "complete"`, 2 s settle, `scripting.executeScript` returns `outerHTML`, close tab. Cap 20 s. One at a time.
+- Tab: wait `status: "complete"`, 2 s settle, `scripting.executeScript` returns `outerHTML`, close tab. Cap 20 s. Background pool 5 tabs (was 1). Reason: Process all.
 - Same text rule (400 chars) and same judge. Success replaces the cache entry, `src: "tab"`, keeps old issues plus "Tab · ok". Same call also asks `yoe` and any label still missing. Reason: JD sent once, seniority run would otherwise resend it. Failure keeps `src: "none"`, adds "Tab · <error>". Reason: button stays, user can retry.
 - Tooltip is hoverable so the button is clickable. Keyboard focus not reachable yet, tooltip sits at end of `body`. Accepted for now. Row tag and tooltip update live.
 - While running: button text "Trying…", disabled. Done: tooltip shows result line.
 - Message `{ type: "render", url }` stays. Background renderer drops the worker window and uses the sender tab's `windowId`. Manifest keeps `scripting`.
 - Uses user cookies, so logged-in LinkedIn or Indeed may work here. Tooltip result tells user which portals render fixes.
+
+### Process all
+Reason: failed view can hold dozens of rows (HTTP 429 etc.), one click each is slow.
+- Failed view only: chip-style button "Process all N" under the chips, N = failed rows shown that have a web link. Disabled when offline or N is 0. Reason for chip look: plain text read as a caption.
+- Calls the same per-row Try in tab handler (`attempt`) for every shown failed row, pool of 5 (`redo`). One code path: same `trying` state, tab render, cache writes, issue updates, one merged Jev call per row.
+- Running: bar plus "Trying 3 of 12 in tabs · Stop". Done counts rows finished. No second run while one runs.
+- Stop: run id bump, same epoch rule. No new tab opens, in-flight answers dropped, their tabs still close. Clear cache also stops it.
+- No link rows (empty or non http(s) url) skipped, never open a tab. Tooltip shows "Tab · no link", no Try in tab button. Reason: Firefox resolves `""` in `tabs.create` against the background page, opened `_generated_background_page.html` in a tab (BiDi trace in Zen) and the board reloaded. Guards: `source` fails "Fetch · no link" with no fetch, `retry` fails "Tab · no link" with no render, background renderer rejects non http(s) before `tabs.create`.
+- All sidebar buttons `type="button"`.
+- Success: row leaves the failed view live. Failure: keeps old issues plus "Tab · <error>", stays with its button.
 
 ### Run
 - Starts on page load. Not gated by any filter. Reason: phase 2 removes rows always.
@@ -289,6 +299,8 @@ Reason: user wants only roles that build software. Titles often just say "traine
 - Unit: stage 2 skipped for linkedin and indeed hosts. Stage 2 reads JD cache, no fetch, null and no Jev call without text.
 - Unit: one Jev request per job carrying all missing labels, text capped. Seniority run after it sends nothing.
 - Unit: No Finnish tag dropped while chip on, back when off.
+- Unit: render guard accepts only absolute http(s), renderer opens no tab for `""` or relative. Retry and source fail no-link rows with no render, fetch or Jev call. Tooltip has no Try in tab for them.
+- Unit: Process all runs at most 5 rows at once, stop starts no new row, success leaves failed state, failure keeps issues. Button only in failed view, disabled offline or empty, Stop while running.
 - Unit: developer asked in merged call for new rows. Backfill of a missing label sends exactly that one question on cached JD, no page fetch. Developer chip off by default, hides only `no`.
 - Unit: Source sorted by shown count, zero hidden unless checked, "Show N more" counts hidden only.
 - Fixture: saved board HTML from `agilefant.org/p/<token>` in `test/fixtures/agilefant.html`.
