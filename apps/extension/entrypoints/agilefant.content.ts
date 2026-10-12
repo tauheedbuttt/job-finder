@@ -175,9 +175,11 @@ export default defineContentScript({
       today: today(),
       verdict: (id: string) => memo.get(id, trainee)?.verdict,
       finnish: (id: string) => memo.get(id, finnish)?.verdict,
+      failed: (id: string) => memo.get(id, finnish)?.src === "none",
       yoe: (id: string) => memo.get(id, labels.yoe)?.verdict,
       senior: (id: string) => memo.get(id, labels.senior)?.verdict,
       staff: (id: string) => memo.get(id, labels.staff)?.verdict,
+      manager: (id: string) => memo.get(id, labels.manager)?.verdict,
       offline,
     });
 

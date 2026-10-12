@@ -200,7 +200,7 @@ export async function run(list: Item[], r: Run): Promise<void> {
   );
 }
 
-export const SENIORITY: Asked[] = [labels.yoe, labels.senior, labels.staff];
+export const SENIORITY: Asked[] = [labels.yoe, labels.senior, labels.staff, labels.manager];
 
 const failed = (id: string, c: Cache) => c.get(id, labels.finnish)?.src === "none";
 

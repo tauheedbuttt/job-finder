@@ -66,6 +66,12 @@ describe("info", () => {
     expect(lines(k).labels).toEqual(["5+ yrs · no (0.12) · page", "Senior · yes (0.91) · title", "Staff · no (0.08) · page"]);
   });
 
+  it("shows the job id on top, without the board prefix", () => {
+    const k: Known = { entries: { finnish: { v: 2, verdict: "no", score: 0.05, src: "page" } }, notes: [] };
+    expect(tip(k, "board::wi-c44e")).toMatch(/^<b>Job<\/b><div data-jf-id>wi-c44e<\/div><b>Labels<\/b>/);
+    expect(tip({ entries: {}, notes: [] }, "board::wi-c44e")).toBe("");
+  });
+
   it("offers Try in tab only on failed Finnish rows, disabled while trying", () => {
     const failed: Known = { entries: { finnish: { v: 1, verdict: "unclear", src: "none", issues: [{ step: "fetch", message: "HTTP 403", at }] } }, notes: [] };
     expect(tip(facts[list[0]!.id]!)).not.toContain("data-jf-try");

@@ -30,8 +30,9 @@ const trainee: Asked = {
 };
 
 // Judged by core checkFast in one call, so these carry no own question.
-const finnish: Label = { name: "finnish", version: 1 };
-const experience: Label = { name: "experience", version: 1 };
+// v2: v1 rows judged by the removed render window on wrong text, rejudged from the JD cache.
+const finnish: Label = { name: "finnish", version: 2 };
+const experience: Label = { name: "experience", version: 2 };
 
 // Criteria only, no signal word lists: lists make Jev keyword bound and too strict.
 const yoe: Asked = {
@@ -85,7 +86,24 @@ const staff: Asked = {
   },
 };
 
-export const labels = { trainee, finnish, experience, yoe, senior, staff } satisfies Record<string, Label>;
+const manager: Asked = {
+  name: "manager",
+  version: 1,
+  question: {
+    type: "noul",
+    instructions: {
+      question: "Is this a manager, director or executive role?",
+      input: "`title` is the job title. `text` is the job description, possibly cut or empty.",
+      note: "Judge what the person is hired to do. A management role leads people, a function or a business, and is held to that rather than to hands-on work. Owning own tasks, mentoring or coordinating with others inside a team is not management. A long list of skills alone does not make a role managerial.",
+    },
+    criteria: {
+      true: "The role is a people, function or business leadership role at manager level or above.",
+      false: "The role is hands-on individual work, even if it involves some coordination or mentoring.",
+    },
+  },
+};
+
+export const labels = { trainee, finnish, experience, yoe, senior, staff, manager } satisfies Record<string, Label>;
 
 export const KEY = "labels:agilefant";
 export const BATCH = 40;

@@ -19,6 +19,7 @@ export const CSS = `
 [data-jf-tip]{position:fixed;z-index:60;max-width:320px;padding:8px 10px;border:1px solid hsl(var(--border));border-radius:calc(var(--radius, .5rem) - 2px);background:hsl(var(--background));color:hsl(var(--foreground));font-size:12px;line-height:1.5;box-shadow:0 8px 30px hsl(var(--foreground) / .12)}
 [data-jf-tip] b{display:block;color:hsl(var(--muted-foreground));font-weight:500}
 [data-jf-tip] b:not(:first-child){margin-top:6px}
+[data-jf-id]{font-family:ui-monospace,monospace;font-size:11px;user-select:all}
 [data-jf-try]{display:block;margin-top:6px;padding:0;border:0;background:none;color:hsl(var(--primary));font:inherit;font-size:12px;cursor:pointer}
 [data-jf-try]:hover:not(:disabled){text-decoration:underline}
 [data-jf-try]:disabled{cursor:default;opacity:.7}
@@ -49,12 +50,13 @@ export function lines(k: Known): { labels: string[]; issues: string[] } {
   };
 }
 
-export function tip(k: Known): string {
+export function tip(k: Known, id = ""): string {
   const l = lines(k);
   const part = (title: string, list: string[]) => (list.length ? `<b>${title}</b>${list.map((s) => `<div>${esc(s)}</div>`).join("")}` : "");
   const failed = k.entries.finnish?.src === "none";
   const button = failed ? `<button type="button" data-jf-try${k.trying ? " disabled" : ""}>${k.trying ? "Trying…" : "Try in tab"}</button>` : "";
-  return part("Labels", l.labels) + part("Issues", l.issues) + button;
+  const body = part("Labels", l.labels) + part("Issues", l.issues) + button;
+  return body && id ? `<b>Job</b><div data-jf-id>${esc(id.split("::").pop()!)}</div>${body}` : body;
 }
 
 // Adds or syncs the Finnish tag and info icon after site remounts; writes only on change.
@@ -106,7 +108,7 @@ export function tips(look: (id: string) => Known, attempt: (id: string) => void)
   let id = "";
   let timer: ReturnType<typeof setTimeout> | undefined;
   const fill = () => {
-    box.innerHTML = tip(look(id));
+    box.innerHTML = tip(look(id), id);
     box.hidden = !box.innerHTML;
   };
   const show = (e: Event) => {

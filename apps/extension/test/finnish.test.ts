@@ -149,7 +149,7 @@ describe("finnish check", () => {
     await run([item("https://jobs.example.fi/1")], { cache: c, deps: d, session: "s", mark: vi.fn(), stop: () => false });
     expect(Object.keys(mock.calls[0]!.questions)).toEqual(["requires_finnish", "requires_experience"]);
     expect(mock.calls[0]!.headers["x-jf-flow"]).toBe("agilefant-finnish");
-    expect(c.get("b::wi-0", labels.finnish)).toEqual({ v: 1, verdict: "yes", score: 0.9, src: "page" });
+    expect(c.get("b::wi-0", labels.finnish)).toEqual({ v: labels.finnish.version, verdict: "yes", score: 0.9, src: "page" });
     expect(c.get("b::wi-0", labels.experience)?.verdict).toBe("yes");
   });
 
@@ -232,7 +232,7 @@ describe("seniority", () => {
     const mark = vi.fn();
     await go(c, d, mark);
     expect(mock.calls).toHaveLength(1);
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["yoe", "staff"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["yoe", "staff", "manager"]);
     expect(mock.calls[0]!.state).toEqual({ title: "Job 0", text: "x".repeat(500) });
     expect(mock.calls[0]!.headers["x-jf-flow"]).toBe("agilefant-seniority");
     expect(c.get("b::wi-0", labels.yoe)).toEqual({ v: 1, verdict: "yes", score: 0.95, src: "page" });
@@ -250,7 +250,7 @@ describe("seniority", () => {
     c.put("b::wi-0", labels.finnish, { verdict: "unclear", src: "none", issues: [] });
     await go(c, d);
     expect(d.page).not.toHaveBeenCalled();
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager"]);
     expect(mock.calls[0]!.state).toEqual({ title: "Job 0", text: "" });
     expect(c.get("b::wi-0", labels.senior)).toMatchObject({ verdict: "yes", src: "title" });
     expect(c.get("b::wi-0", labels.staff)?.src).toBe("title");
@@ -264,7 +264,7 @@ describe("seniority", () => {
     const c = cache();
     await c.load();
     await go(c, d);
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager"]);
     expect(c.get("b::wi-0", labels.yoe)).toBeUndefined();
   });
 });

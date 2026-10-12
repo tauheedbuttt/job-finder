@@ -49,7 +49,7 @@ describe("sidebar", () => {
     const bar = sidebar({ toggle: vi.fn(), reset: vi.fn(), clear: vi.fn(), fold: vi.fn() });
     bar.render(view);
     const root = bar.host.shadowRoot!;
-    expect([...root.querySelectorAll(".chip")].map((c) => c.textContent)).toEqual(["No Finnish", "Max 4 yrs", "No senior", "No staff", "Trainee", "New this week"]);
+    expect([...root.querySelectorAll(".chip")].map((c) => c.textContent)).toEqual(["No Finnish", "Max 4 yrs", "No senior", "No staff", "No manager", "Trainee", "New this week"]);
     expect([...root.querySelectorAll(".fold")].map((f) => f.textContent)).toEqual(["Source"]);
   });
 

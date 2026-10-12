@@ -157,7 +157,7 @@ export function sidebar(actions: Actions, shut: string[] = []) {
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       status(v),
-      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("trainee", "Trainee", f.trainee)}${chip("week", "New this week", f.week)}</div>`,
+      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("week", "New this week", f.week)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
       progress(v),
       group(
         "source",

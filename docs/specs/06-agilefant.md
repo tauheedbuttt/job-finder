@@ -51,6 +51,7 @@ Reason for rewrite: first build read as a foreign widget. Washed-out text, invis
 - Groups, top to bottom:
   - **Quick**: chips. "No Finnish", "Trainee", "New this week". "No Finnish" on by default. No group title, chips sit right under header. Trainee labeling progress (2 px `--primary` bar plus "Checking 120 of 787") sits right under the chips.
   - **Source**: one option per link host, `www.` stripped, sorted by count, top 6 then "Show 26 more" text button (`--muted-foreground`, hover `--foreground`). None checked = all sources.
+- Chip "Fetch failed N", last, default off. Shown only when N > 0 or on. On: only rows with Finnish `src: "none"`. Hide chips (No Finnish, Max 4 yrs, No senior, No staff) step aside in this view. Trainee, week and source still apply. N counts with the same rule. Reason: user wants to inspect failed portals and use Try in tab on them.
 - Removed: "Closing soon" chip and the Role type, Deadline, Added groups. Reason: user never uses them. Options with no UI (`unclear`, `deadline`, `closing`, `month`) are forced off on restore, so old saved state never hides rows.
 - Footer, 24 px above, small meta style: "812 labels cached · Clear". "Clear" is a text button. Click swaps line to "Clear 812 labels? Clear / Cancel", Clear in `--primary`. No `window.confirm`. Reason: dialogs block page and extension tooling. Footer hidden when 0 labels cached.
 
@@ -112,7 +113,7 @@ Reason: user never wants Finnish-required jobs, same as duunitori. Board links p
 
 ### Judge
 - Reuse `checkFast` from core, `requires_finnish` question as is. Explicit statement only. JD written in Finnish is not evidence. No new question.
-- Same call returns `requires_experience`. Cache both as labels `finnish` and `experience`, version 1. Only `finnish` gets a row tag. `experience` shows in the info tooltip. Reason: free, avoids relabel when experience filter comes.
+- Same call returns `requires_experience`. Cache both as labels `finnish` and `experience`, version 2. Reason for v2: v1 rows from the removed render window were judged on wrong text (Lokki relay job scored 0.05, cached JD scores 0.95). Bump rejudges from JD cache, no refetch. Only `finnish` gets a row tag. `experience` shows in the info tooltip. Reason: free, avoids relabel when experience filter comes.
 - `question` optional on `Label`. Finnish and experience have none, `checkFast` asks both in one call.
 - JD only. No title stage. Reason: titles never state language demands.
 - Text: `extract(html)` first (JSON-LD, else `pickDescription`). Extract null: fall back to whole page text, `body.innerText`, whitespace collapsed, nav/header/footer/script/style removed, cut at `CAP`. Reason: unknown portals, pick can miss, whole DOM still holds the language line.
@@ -160,6 +161,7 @@ Reason: one place per row for everything we know about it. Labels now, Jev or LL
 - Shown when the row has any cached label or any issue. Issue rows tint icon `--primary`. Not shown before anything is known.
 - Hidden until row hover or focus, same as remove button. Always shown on touch. Reason: user wants it only with the cross, not on every row.
 - Hover or focus: tooltip, own element in light DOM, left of icon, max width 320 px, `--background` fill, `--border` stroke, soft shadow, 12 px text. No `title` attribute. Reason: native tooltip slow and unstyled.
+- Tooltip top: "Job" plus item id without board prefix (`wi-<uuid>`), monospace, select-all. Only when the tooltip has other content. Reason: user needs the id to debug storage.
 - Tooltip body, sections in order, each skipped when empty:
   - Labels: one line per cached label. "Finnish · required (0.91) · page", "Trainee · yes (0.88) · title". Verdict words per label, score 2 decimals, source.
   - Issues: one line per issue. step, message, time. Example: "Fetch · text too short · 14:02".
@@ -179,13 +181,13 @@ Reason: Finnish run threw JD text away after judging. New labels would refetch ~
 
 ## Seniority labels
 Reason: user wants roles open to people with up to 4 years of experience. Hide 5+ year roles, senior roles and staff roles by default.
-Three separate labels, version 1 each: `yoe`, `senior`, `staff`. Each has its own chip.
+Four separate labels, version 1 each: `yoe`, `senior`, `staff`, `manager`. Each has its own chip. `manager` added later: user wants no manager, director or executive roles.
 
 ### Judge
 - One Jev call per row, state `{ title, text }`, text from JD cache or fetch. Ask only labels that miss in cache. Reason: one call per row, no repeat spend.
 - Questions in `lib/labels.ts` as registry entries with `question`. Give Jev criteria, never a list of signal words. Reason: signal lists make Jev too strict and keyword bound. Criteria let it judge the whole JD.
 - A long list of tech skills is not a seniority signal. Say so once in each note. Reason: user saw JDs with many skills that are still junior friendly.
-- Failed rows (no text): `senior` and `staff` judged from title alone, `src: "title"`. `yoe` stays unlabeled. Reason: titles often say senior or staff, years need a JD.
+- Failed rows (no text): `senior`, `staff` and `manager` judged from title alone, `src: "title"`. `yoe` stays unlabeled. Reason: titles often say senior or staff, years need a JD.
 - Failed row = Finnish entry `src: "none"`. Seniority run never refetches it. Reason: `yoe` always misses there, refetch every load wastes time.
 - Fetch fails in seniority run on a non-failed row: judge from title, `yoe` empty, refetch next load. No extra Jev spend.
 - Finnish check also reads JD cache before fetch. Reason: saves fetch on a Finnish version bump.
@@ -219,6 +221,19 @@ const senior: NoulQuestion = {
   },
 };
 
+const manager: NoulQuestion = {
+  type: "noul",
+  instructions: {
+    question: "Is this a manager, director or executive role?",
+    input: "`title` is the job title. `text` is the job description, possibly cut or empty.",
+    note: "Judge what the person is hired to do. A management role leads people, a function or a business, and is held to that rather than to hands-on work. Owning own tasks, mentoring or coordinating with others inside a team is not management. A long list of skills alone does not make a role managerial.",
+  },
+  criteria: {
+    true: "The role is a people, function or business leadership role at manager level or above.",
+    false: "The role is hands-on individual work, even if it involves some coordination or mentoring.",
+  },
+};
+
 const staff: NoulQuestion = {
   type: "noul",
   instructions: {
@@ -234,7 +249,7 @@ const staff: NoulQuestion = {
 ```
 
 ### Filters
-- Quick chips, all pre-selected (`blank` true): "Max 4 yrs" hides `yoe` yes, "No senior" hides `senior` yes, "No staff" hides `staff` yes. Order after "No Finnish".
+- Quick chips, all pre-selected (`blank` true): "Max 4 yrs" hides `yoe` yes, "No senior" hides `senior` yes, "No staff" hides `staff` yes, "No manager" hides `manager` yes. Order after "No Finnish".
 - Same rule as No Finnish. Only `yes` hides. `unclear`, failed and unlabeled rows stay.
 - Each chip is its own filter group, so facet logic stays the same.
 - Saved filters without these keys load them as on.

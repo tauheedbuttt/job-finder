@@ -100,6 +100,13 @@ describe("facets", () => {
     expect(visible(list, { ...blank, trainee: true }, ctx({ b: "no" }, true))).toHaveLength(4);
   });
 
+  it("shows only fetch-failed rows in failed view, ignoring hide chips", () => {
+    const c = { ...ctx(), finnish: () => "yes" as const, failed: (id: string) => id === "a" || id === "c" };
+    expect(visible(list, blank, c)).toHaveLength(0);
+    expect(visible(list, { ...blank, failed: true }, c).map((i) => i.id)).toEqual(["a", "c"]);
+    expect(counts(list, blank, c).failed).toBe(2);
+  });
+
   it("hides Finnish-required rows by default and keeps unclear or unlabeled ones", () => {
     const c = { ...ctx(), finnish: (id: string) => ({ a: "yes", b: "unclear", c: "no" })[id] as "yes" | "no" | "unclear" | undefined };
     expect(visible(list, blank, c).map((i) => i.id)).toEqual(["b", "c", "d"]);
