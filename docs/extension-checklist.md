@@ -33,13 +33,16 @@ Setup: `pnpm dev:firefox` (translator plus Firefox build). Zen: `about:debugging
 ## Agilefant board
 Open `https://agilefant.org/p/<token>` with the extension loaded and translator running.
 
-- [ ] Wide window: sidebar sits left of the job column, top 96 px, own scroll. "Showing N of M" matches rows.
-- [ ] Narrow window (gutter under 244 px): "Filters" button top-left. Click opens drawer. Esc and outside click close it.
-- [ ] Tick "Trainee / graduate". Progress bar and "Labeling X / Y" show. Unlabeled rows stay until labeled. Non-trainee rows hide.
+- [ ] Wide window: sidebar sits left of the job column, header level with site search, sticks near top on scroll. "N jobs" or "N of M jobs" matches rows. Colors match site pink.
+- [ ] Narrow window (gutter under 264 px): "Filters" button top-left. Click opens drawer. Esc and outside click close it.
+- [ ] Tick "Trainee / graduate". Count spinner, progress bar and "Checking X of Y" show. Before any labeling count shows `-`, never `0`. Unlabeled rows stay until labeled. Non-trainee rows hide.
 - [ ] "Include unclear" adds unclear rows back. Reload page. Filter restored, labels instant, no new Jev calls.
 - [ ] Type in site search with our filter on. Both apply (AND). Clear search, our hides stay.
 - [ ] Click site Refresh. Hidden rows stay hidden.
 - [ ] Deadline, Added and Source options filter rows. Counts change with other groups. Quick chips mirror checkboxes.
 - [ ] Stop translator, clear cache, tick trainee. Progress line shows "Translator offline", no rows hidden by it.
-- [ ] "Clear label cache" turns into inline "Clear N labels? Clear / Cancel". Cancel restores. Clear empties count, labeling restarts only when trainee is on.
-- [ ] Firefox build (Zen): sidebar, trainee filter and clear cache work same as Chrome.
+- [ ] Footer "N labels cached · Clear" hidden when 0. "Clear" turns into inline "Clear N labels? Clear / Cancel". Cancel restores. Clear empties count, labeling restarts only when trainee is on.
+- [ ] Hover a row: × shows in the right gutter, columns do not shift. Click: row hides, toast "Job removed · Undo" for 5 s. Undo brings it back.
+- [ ] Toolbar shows "Removed N" after Any / All, hidden at 0. Click: only removed rows, restore icon per row, "Restore all" next to it. Restoring last row leaves the view.
+- [ ] Reload: removed rows stay removed. Site search and Refresh keep × buttons on rows.
+- [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome.

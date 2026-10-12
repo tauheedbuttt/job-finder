@@ -1,17 +1,7 @@
-import {
-  blank,
-  counts,
-  flip,
-  items,
-  sources,
-  style,
-  today,
-  visible,
-  type Filters,
-  type Item,
-} from "@/lib/agilefant";
+import { blank, counts, flip, items, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
 import { cache, labels, run } from "@/lib/labels";
 import { relayed } from "@/lib/relay";
+import { CSS, decorate, KEY as GONE, kept, pick, toast, toolbar, type Removed } from "@/lib/removed";
 import { load } from "@/lib/settings";
 import { sidebar } from "@/lib/sidebar";
 
@@ -40,8 +30,7 @@ type Saved = Partial<Filters> & { folded?: string[] };
 
 async function restore(): Promise<{ filters: Filters; folded?: string[] }> {
   try {
-    const { folded, ...got } = ((await browser.storage.local.get(KEY))[KEY] ??
-      {}) as Saved;
+    const { folded, ...got } = ((await browser.storage.local.get(KEY))[KEY] ?? {}) as Saved;
     return { filters: { ...blank, ...got }, folded };
   } catch {
     return { filters: { ...blank } };
@@ -63,10 +52,10 @@ export default defineContentScript({
     const saved = await restore();
     let filters = saved.filters;
     let folded = saved.folded;
-    const persist = () =>
-      void browser.storage.local
-        .set({ [KEY]: { ...filters, folded } })
-        .catch(() => undefined);
+    const persist = () => void browser.storage.local.set({ [KEY]: { ...filters, folded } }).catch(() => undefined);
+    let gone = (((await browser.storage.local.get(GONE).catch(() => ({}))) as Record<string, Removed | undefined>)[GONE] ?? {}) as Removed;
+    let trash = false;
+    const keepGone = () => void browser.storage.local.set({ [GONE]: gone }).catch(() => undefined);
     let offline = false;
     let running = false;
     let again = false;
@@ -75,7 +64,9 @@ export default defineContentScript({
 
     const veil = document.createElement("style");
     veil.dataset.jfAgilefant = "";
-    document.head.append(veil);
+    const look = document.createElement("style");
+    look.textContent = CSS;
+    document.head.append(veil, look);
 
     const remember = (list: Item[]) => list.forEach((i) => known.set(i.id, i));
     remember(rows);
@@ -99,6 +90,34 @@ export default defineContentScript({
       folded,
     );
     document.body.append(bar.host);
+
+    function drop(ids: string[], on: boolean) {
+      gone = { ...gone };
+      for (const id of ids) on ? (gone[id] = Date.now()) : delete gone[id];
+      if (trash && !Object.keys(gone).length) trash = false;
+      keepGone();
+      update();
+    }
+
+    const tools = toolbar({
+      view: () => {
+        trash = !trash;
+        update();
+      },
+      all: () => drop(Object.keys(gone), false),
+    });
+
+    // One delegated listener survives React remounting the rows.
+    document.addEventListener("click", (e) => {
+      const button = (e.target as Element).closest<HTMLElement>("[data-jf-remove]");
+      const id = button?.dataset.jfRemove;
+      if (!id) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (id in gone) return drop([id], false);
+      drop([id], true);
+      toast("Job removed", () => drop([id], false));
+    });
     bar.place();
 
     const ctx = () => ({
@@ -111,22 +130,23 @@ export default defineContentScript({
       frame = 0;
       const c = ctx();
       const all = [...known.values()];
-      const keep = new Set(visible(all, filters, c).map((i) => i.id));
-      veil.textContent = style(
-        all.filter((i) => !keep.has(i.id)).map((i) => i.id),
-      );
+      const keep = new Set((trash ? pick(all, gone) : visible(kept(all, gone), filters, c)).map((i) => i.id));
+      const live = kept(rows, gone);
+      veil.textContent = style(all.filter((i) => !keep.has(i.id)).map((i) => i.id));
       const done = all.filter((i) => memo.get(i.id, trainee)).length;
       bar.render({
         filters,
-        counts: counts(rows, filters, c),
-        sources: sources(rows),
-        shown: rows.filter((i) => keep.has(i.id)).length,
-        total: rows.length,
+        counts: counts(live, filters, c),
+        sources: sources(live),
+        shown: trash ? live.length : live.filter((i) => keep.has(i.id)).length,
+        total: live.length,
         progress: running ? { done, total: all.length } : null,
         offline,
         cached: memo.size(),
-        unlabeled: rows.some((i) => !memo.get(i.id, trainee)),
+        unlabeled: live.some((i) => !memo.get(i.id, trainee)),
       });
+      decorate(document, trash);
+      tools.render(Object.keys(gone).length, trash);
     }
 
     function update() {
@@ -152,7 +172,7 @@ export default defineContentScript({
         again = true;
         return;
       }
-      const list = [...known.values()];
+      const list = kept([...known.values()], gone);
       if (list.every((i) => memo.get(i.id, trainee))) return;
       const mine = ++epoch;
       running = true;
@@ -183,8 +203,9 @@ export default defineContentScript({
       clearTimeout(pending);
       pending = setTimeout(() => {
         const next = items(document);
-        if (next.map((i) => i.id).join() === rows.map((i) => i.id).join())
-          return;
+        decorate(document, trash);
+        tools.render(Object.keys(gone).length, trash);
+        if (next.map((i) => i.id).join() === rows.map((i) => i.id).join()) return;
         const fresh = next.some((i) => !known.has(i.id));
         rows = next;
         remember(next);

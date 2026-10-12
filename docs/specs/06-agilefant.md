@@ -1,7 +1,7 @@
 # Spec 06: agilefant filters
 
 ## Goal
-Left sidebar of filters on the Agilefant "Open jobs" board, like ecom sites. First Jev filter: trainee roles. Labels cached per listing so filtering is instant and cheap.
+Left sidebar of filters on the Agilefant "Open jobs" board, like ecom sites. First Jev filter: trainee roles. Rows can be removed and restored. Labels cached per listing so filtering is instant and cheap.
 Reason: board holds ~800 listings from many sites. Titles alone miss many trainee roles.
 
 ## Site facts (checked with playwright-cli, 2026-10-12)
@@ -62,6 +62,17 @@ Reason for rewrite: first build read as a foreign widget. Washed-out text, invis
 - Counts per option = rows matching that option with all other groups applied. Reason: ecom facet behaviour, user sees what a click will give.
 - Motion: 120 ms ease on hover fill, chevron, collapse height. Nothing else animates.
 
+## Remove rows
+Reason: user checks a job, dislikes it, wants it gone for good. Needs a way back.
+- Each row gets a remove button at its right end, after the created date. Lucide `x` icon, 24 px hit area, `text-muted-foreground`, hover `text-foreground` plus `bg-accent`. Hidden until row hover or focus. Always shown on touch (`hover: none`). `aria-label` "Remove job".
+- Buttons live in light DOM and use site Tailwind classes. One document `<style>` for hover reveal. Rows remount on search and Refresh, so the rescan re-adds missing buttons.
+- Click: row hides at once through the same hide `<style>`. Toast bottom center for 5 s: "Job removed · Undo". Undo restores it.
+- Removed ids saved in `browser.storage.local` key `agilefant:removed`, value `{ [itemId]: removedAt }`. No TTL. Label cache untouched.
+- Removed rows leave the sidebar counts and the "N jobs" line.
+- Toolbar: button "Removed N" inserted after the site "Any / All" group (`[role=radiogroup][aria-label="Rows must contain"]`). Same classes as the site "Show only jobs with deadline" button, so it reads as native. Not inside the radiogroup. Reason: that group sets search word matching, a third radio there would mean something else. Hidden while N is 0.
+- Click "Removed N": removed view. List shows only removed rows, sidebar filters ignored, button gets `bg-accent text-foreground` and `aria-pressed`. Row button turns into Lucide `rotate-ccw` "Restore job", always visible. "Restore all" button appears next to toolbar button, same style. Click again or restoring the last row leaves the view.
+- Restore all needs no confirm. Reason: nothing is lost, rows only come back.
+
 ## Label engine (generic, reused by later Jev filters)
 - Registry in `lib/labels.ts`: `Label = { name, version, question: NoulQuestion }`. First entry `trainee`, version 1.
 - Cache: one storage key `labels:agilefant`, value `{ [itemId]: { [labelName]: { v, verdict, score, src } } }`. `v` = label version. `src` = `"title"` or `"jd"`. Read once at start into memory `Map`. Writes debounced 1 s, one `storage.set`.
@@ -108,4 +119,5 @@ const trainee: NoulQuestion = {
 - Unit: trainee batch builds 40-item chunks and maps answers back by index.
 - Unit: stage 2 skipped for linkedin and indeed hosts.
 - Fixture: saved board HTML from `agilefant.org/p/<token>` in `test/fixtures/agilefant.html`.
-- Manual checklist in `docs/extension-checklist.md`: sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, Refresh keeps hide, clear cache inline confirm, Firefox build.
+- Unit: removed view shows only removed rows, normal view drops them. Row button added once, label flips in removed view.
+- Manual checklist in `docs/extension-checklist.md`: remove, undo, removed view, restore all, sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, Refresh keeps hide, clear cache inline confirm, Firefox build.

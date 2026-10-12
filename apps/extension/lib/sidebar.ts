@@ -24,8 +24,7 @@ const GAP = 32;
 const TOP = 173;
 
 // Site colors live on :root as HSL triples and inherit into the shadow root.
-const c = (name: string, fallback: string) =>
-  `hsl(var(--${name}, ${fallback}))`;
+const c = (name: string, fallback: string) => `hsl(var(--${name}, ${fallback}))`;
 const FG = c("foreground", "340 25% 12%");
 const MUTED = c("muted-foreground", "340 10% 48%");
 const PRIMARY = c("primary", "340 65% 47%");
@@ -92,13 +91,9 @@ const CHEVRON = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stro
 const FUNNEL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg>`;
 const TOP_HOSTS = 6;
 
-const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-export function sidebar(
-  actions: Actions,
-  shut: string[] = ["deadline", "added"],
-) {
+export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]) {
   const host = document.createElement("div");
   host.dataset.jfSidebar = "";
   const root = host.attachShadow({ mode: "open" });
@@ -128,17 +123,10 @@ export function sidebar(
         : `<span class="count">-</span>`
       : `<span class="count">${view.counts[key] ?? 0}</span>`;
 
-  const check = (
-    key: Key,
-    label: string,
-    view: View,
-    on: boolean,
-    sub = false,
-  ) =>
+  const check = (key: Key, label: string, view: View, on: boolean, sub = false) =>
     `<button class="check${sub ? " sub" : ""}" role="checkbox" aria-checked="${on}" data-act="toggle" data-key="${esc(key)}"><span class="box">${CHECK}</span><span class="label">${esc(label)}</span>${sub ? "" : count(key, view)}</button>`;
 
-  const chip = (key: Key, label: string, on: boolean) =>
-    `<button class="chip" aria-pressed="${on}" data-act="toggle" data-key="${key}">${label}</button>`;
+  const chip = (key: Key, label: string, on: boolean) => `<button class="chip" aria-pressed="${on}" data-act="toggle" data-key="${key}">${label}</button>`;
 
   const group = (key: string, title: string, body: string) => {
     const closed = folded.has(key);
@@ -148,9 +136,7 @@ export function sidebar(
   const progress = (v: View) => {
     if (v.offline) return `<div class="progress">Translator offline</div>`;
     if (!v.progress) return "";
-    const pct = v.progress.total
-      ? Math.round((v.progress.done / v.progress.total) * 100)
-      : 0;
+    const pct = v.progress.total ? Math.round((v.progress.done / v.progress.total) * 100) : 0;
     return `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div>Checking ${v.progress.done} of ${v.progress.total}</div>`;
   };
 
@@ -165,52 +151,22 @@ export function sidebar(
   function render(v: View) {
     last = v;
     const f = v.filters;
-    const top = all
-      ? v.sources
-      : v.sources.filter((h, i) => i < TOP_HOSTS || f.hosts.includes(h));
+    const top = all ? v.sources : v.sources.filter((h, i) => i < TOP_HOSTS || f.hosts.includes(h));
     const rest = v.sources.length - TOP_HOSTS;
-    const now =
-      root.activeElement instanceof HTMLElement &&
-      panel.contains(root.activeElement)
-        ? root.activeElement
-        : null;
-    const focus = now
-      ? `[data-act="${now.dataset.act}"]${now.dataset.key === undefined ? "" : `[data-key="${now.dataset.key}"]`}`
-      : null;
+    const now = root.activeElement instanceof HTMLElement && panel.contains(root.activeElement) ? root.activeElement : null;
+    const focus = now ? `[data-act="${now.dataset.act}"]${now.dataset.key === undefined ? "" : `[data-key="${now.dataset.key}"]`}` : null;
     panel.innerHTML = [
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       `<div class="chips">${chip("trainee", "Trainee", f.trainee)}${chip("closing", "Closing soon", f.closing)}${chip("week", "New this week", f.week)}</div>`,
-      group(
-        "role",
-        "Role type",
-        check("trainee", "Trainee / graduate", v, f.trainee) +
-          check("unclear", "Include unclear", v, f.unclear, true) +
-          progress(v),
-      ),
-      group(
-        "deadline",
-        "Deadline",
-        check("deadline", "Has deadline", v, f.deadline) +
-          check("closing", "Closing in 7 days", v, f.closing),
-      ),
-      group(
-        "added",
-        "Added",
-        check("week", "This week", v, f.week) +
-          check("month", "Last 30 days", v, f.month),
-      ),
+      group("role", "Role type", check("trainee", "Trainee / graduate", v, f.trainee) + check("unclear", "Include unclear", v, f.unclear, true) + progress(v)),
+      group("deadline", "Deadline", check("deadline", "Has deadline", v, f.deadline) + check("closing", "Closing in 7 days", v, f.closing)),
+      group("added", "Added", check("week", "This week", v, f.week) + check("month", "Last 30 days", v, f.month)),
       group(
         "source",
         "Source",
-        top
-          .map((h) =>
-            check(`host:${h}`, h.replace(/^www\./, ""), v, f.hosts.includes(h)),
-          )
-          .join("") +
-          (rest > 0
-            ? `<button class="more" data-act="more">${all ? "Show less" : `Show ${rest} more`}</button>`
-            : ""),
+        top.map((h) => check(`host:${h}`, h.replace(/^www\./, ""), v, f.hosts.includes(h))).join("") +
+          (rest > 0 ? `<button class="more" data-act="more">${all ? "Show less" : `Show ${rest} more`}</button>` : ""),
       ),
       foot(v),
     ].join("");

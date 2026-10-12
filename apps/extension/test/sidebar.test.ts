@@ -2,7 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { blank } from "../lib/agilefant";
 import { sidebar, type View } from "../lib/sidebar";
 
-const view: View = { filters: blank, counts: { trainee: 3, "host:a.fi": 2 }, sources: ["a.fi"], shown: 5, total: 7, progress: { done: 1, total: 7 }, offline: false, cached: 12, unlabeled: false };
+const view: View = {
+  filters: blank,
+  counts: { trainee: 3, "host:a.fi": 2 },
+  sources: ["a.fi"],
+  shown: 5,
+  total: 7,
+  progress: { done: 1, total: 7 },
+  offline: false,
+  cached: 12,
+  unlabeled: false,
+};
 
 describe("sidebar", () => {
   it("renders counts and sends toggles", () => {
