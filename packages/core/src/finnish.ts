@@ -55,7 +55,7 @@ const fast: NoulQuestion = {
   type: "noul",
   instructions: {
     question: "Does this job description explicitly ask for Finnish language skill?",
-    input: "`text` is a job description in its original language, possibly cut at the end.",
+    input: "`text` is a job description in its original language, possibly cut at the end. `title`, when present, is the job title.",
     note: "The description being written in Finnish is not evidence. Only count text that states Finnish skill is required, preferred, or an advantage.",
   },
   criteria: {
@@ -72,7 +72,7 @@ const experience: NoulQuestion = {
   type: "noul",
   instructions: {
     question: "Does this job require prior work experience in this role or field?",
-    input: "`text` is a job description in its original language, possibly cut at the end.",
+    input: "`text` is a job description in its original language, possibly cut at the end. `title`, when present, is the job title.",
     note: "Only count text that demands experience, such as years of experience or 'kokemusta edellytetään'. Experience named only as an advantage ('eduksi', 'nice to have'), trainee, summer job, entry level or 'no experience needed' is not a demand.",
   },
   criteria: {
@@ -80,6 +80,9 @@ const experience: NoulQuestion = {
     false: "The text does not demand prior experience, or says it is optional or not needed.",
   },
 };
+
+// Shared so callers can merge them into one call with own questions.
+export const FAST = { finnish: fast, experience };
 
 export async function checkFast(input: { text: string }, options: FinnishOptions = {}): Promise<Fast> {
   const t = limits.parse(options.thresholds ?? {});

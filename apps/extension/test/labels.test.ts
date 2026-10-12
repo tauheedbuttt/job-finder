@@ -1,10 +1,7 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "../lib/agilefant";
-import { cache, chunks, KEY, labels, run, skip, titles, type Cache } from "../lib/labels";
+import { cache, chunks, KEY, labels, run, skip, titles, type Cache, type Run } from "../lib/labels";
 
-const fixture = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 const { trainee } = labels;
 
@@ -125,11 +122,11 @@ describe("run", () => {
     await c.load();
   });
 
-  const deps = (fetch: typeof globalThis.fetch, page: typeof globalThis.fetch) => ({
+  const deps = (fetch: typeof globalThis.fetch, deep: Run["deep"]) => ({
     label: trainee,
     cache: c,
     opts: { fetch },
-    page,
+    deep,
     session: "s",
     url: "https://agilefant.org/p/x",
     mark: vi.fn(),
@@ -151,31 +148,25 @@ describe("run", () => {
     expect(skip("https://fi.indeed.com/viewjob?jk=1")).toBe(true);
     expect(skip("https://duunitori.fi/tyopaikat/tyo/a")).toBe(false);
     const mock = jev(() => 0.5);
-    const page = vi.fn() as unknown as typeof globalThis.fetch;
-    await run([item(0, "https://www.linkedin.com/jobs/view/1"), item(1, "https://fi.indeed.com/viewjob?jk=1")], deps(mock.fetch, page));
-    expect(page).not.toHaveBeenCalled();
+    const deep = vi.fn();
+    await run([item(0, "https://www.linkedin.com/jobs/view/1"), item(1, "https://fi.indeed.com/viewjob?jk=1")], deps(mock.fetch, deep));
+    expect(deep).not.toHaveBeenCalled();
     expect(mock.calls).toHaveLength(1);
     expect(c.get("b::wi-0", trainee)).toEqual({ v: 1, verdict: "unclear", score: 0.5, src: "title" });
   });
 
-  it("judges unclear rows on their JD through the page fetch", async () => {
-    const mock = jev((state) => (state.jobs ? 0.5 : 0.95));
-    const page = vi.fn(async () => new Response(fixture("duunitori.html"), { status: 200 })) as unknown as typeof globalThis.fetch;
-    await run([item(0)], deps(mock.fetch, page));
-    expect(page).toHaveBeenCalledWith("https://duunitori.fi/tyo/0");
-    const jd = mock.calls[1]!;
-    expect(jd.headers["x-jf-flow"]).toBe("agilefant-jd");
-    expect(jd.state.title).toBe("Job 0");
-    expect(jd.state.text.length).toBeGreaterThan(100);
-    expect(c.get("b::wi-0", trainee)).toEqual({ v: 1, verdict: "yes", score: 0.95, src: "jd" });
+  it("judges unclear rows through the JD callback", async () => {
+    const mock = jev(() => 0.5);
+    const deep = vi.fn(async () => ({ verdict: "yes" as const, score: 0.95, src: "page" as const }));
+    await run([item(0)], deps(mock.fetch, deep));
+    expect(deep).toHaveBeenCalledWith(item(0));
+    expect(mock.calls).toHaveLength(1);
+    expect(c.get("b::wi-0", trainee)).toEqual({ v: 1, verdict: "yes", score: 0.95, src: "page" });
   });
 
-  it("keeps and caches stage-1 unclear when the page fetch fails", async () => {
+  it("keeps and caches stage-1 unclear when there is no JD", async () => {
     const mock = jev(() => 0.5);
-    const page = vi.fn(async () => {
-      throw new TypeError("Failed to fetch");
-    }) as unknown as typeof globalThis.fetch;
-    await run([item(0)], deps(mock.fetch, page));
+    await run([item(0)], deps(mock.fetch, async () => null));
     expect(c.get("b::wi-0", trainee)).toEqual({ v: 1, verdict: "unclear", score: 0.5, src: "title" });
   });
 

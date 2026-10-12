@@ -6,6 +6,8 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 - [ ] Click gear. Settings view with back arrow. Change translator URL and both sliders. Value shows right of label.
 - [ ] Drag `no` up to `yes`. It stops one step below. Drag `yes` down. It stops one step above `no`.
 - [ ] Reset restores defaults, toggle untouched. Reopen popup. Opens on Filters, values kept.
+- [ ] Settings > Export saves `job-finder-backup-<date>.json`. Import it back: "Imported N keys". Bad file: "Import failed". Reload board, labels and removed rows kept.
+- [ ] Dev build with `pnpm dev` stopped: popup shows "did not load" line, not a blank blob.
 - [ ] Duunitori list page: each visible card gets a pill. Loading, then verdict. Finnish-required cards vanish.
 - [ ] Finnish card title shows `original - English`. English title unchanged.
 - [ ] Scroll list. New cards get pills. Reload page. Cached pills show instantly.
@@ -24,6 +26,7 @@ Setup: `pnpm i`, key in `apps/translator/.env`, `pnpm dev`. Chrome: `chrome://ex
 Setup: `pnpm dev:firefox` (translator plus Firefox build). Zen: `about:debugging#/runtime/this-firefox`, "Load Temporary Add-on", pick `apps/extension/.output/firefox-mv3-dev/manifest.json`. Gone on restart.
 
 - [ ] Popup opens. If site access missing, red banner with "Grant access". Click, approve. Reopen popup, banner gone.
+- [ ] Settings > Export or Import opens a tab on Settings. Both work there.
 - [ ] Toolbar icon matches Zen theme, light and dark, without opening popup.
 - [ ] Duunitori list page: pills and title translate work, same as Chrome.
 - [ ] Detail page: "Translate" JD works, "Show original" restores.

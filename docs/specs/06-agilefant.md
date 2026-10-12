@@ -50,7 +50,7 @@ Reason for rewrite: first build read as a foreign widget. Washed-out text, invis
 - Header row: "Filters" left. Right side "Reset" (text button, `--primary`) only when any filter on. Under it, meta line "787 jobs" or "42 of 787 jobs" when filtered.
 - Groups, top to bottom:
   - **Quick**: chips. "No Finnish", "Trainee", "New this week". "No Finnish" on by default. No group title, chips sit right under header. Trainee labeling progress (2 px `--primary` bar plus "Checking 120 of 787") sits right under the chips.
-  - **Source**: one option per link host, `www.` stripped, sorted by count, top 6 then "Show 26 more" text button (`--muted-foreground`, hover `--foreground`). None checked = all sources.
+  - **Source**: one option per link host, `www.` stripped, sorted by shown count desc (tie: name), top 6 then "Show N more" text button (`--muted-foreground`, hover `--foreground`). Count 0 hidden unless checked. N = hidden hosts only. None checked = all sources. Reason: zero hosts were noise and order ignored active filters; checked zero host stays so user can uncheck it.
 - Chip "Fetch failed N", last, default off. Shown only when N > 0 or on. On: only rows with Finnish `src: "none"`. Hide chips (No Finnish, Max 4 yrs, No senior, No staff) step aside in this view. Trainee, week and source still apply. N counts with the same rule. Reason: user wants to inspect failed portals and use Try in tab on them.
 - Removed: "Closing soon" chip and the Role type, Deadline, Added groups. Reason: user never uses them. Options with no UI (`unclear`, `deadline`, `closing`, `month`) are forced off on restore, so old saved state never hides rows.
 - Footer, 24 px above, small meta style: "812 labels cached · Clear". "Clear" is a text button. Click swaps line to "Clear 812 labels? Clear / Cancel", Clear in `--primary`. No `window.confirm`. Reason: dialogs block page and extension tooling. Footer hidden when 0 labels cached.
@@ -77,15 +77,16 @@ Reason: user checks a job, dislikes it, wants it gone for good. Needs a way back
 - Cache: one storage key `labels:agilefant`, value `{ [itemId]: { [labelName]: { v, verdict, score, src } } }`. `v` = label version. `src` = `"title"`, `"jd"`, `"page"` (Finnish run), `"tab"` (Try in tab) or `"none"` (failed). Read once at start into memory `Map`. Writes debounced 1 s, one `storage.set`.
 - Miss = no entry, or entry `v` differs from registry version. Reason: changing a question bumps version and relabels, no manual clear needed.
 - No TTL. Listings do not change meaning. Clear button is the escape hatch.
-- Labeling runs only when a Jev filter is on. Reason: no Jev spend for users who only use date or source filters. Once labeled, toggling is pure memory.
+- Trainee title batch runs only when its filter is on. Trainee also rides along free in the merged JD call (see "One call per job"). Once labeled, toggling is pure memory.
 - Only cache misses go to Jev. New listings on a later visit are the only new work.
 
 ## Trainee label
-- Stage 1, titles. Batch 40 items per Jev call: state `{ jobs: [{ title, alt, host }] }`, one noul question per item `trainee_<i>`. Pool of 3 calls. Reason: ~20 calls for a cold board, small payloads.
+- Changed: new rows get trainee in the merged JD call, any filter state. Reason: one extra question in a call that happens anyway costs near nothing, and the filter is instant later.
+- Stage 1, titles. Only while filter on, only rows already Finnish-judged that still lack trainee (old cache, Jev error). Runs after the Finnish run. Batch 40 items per Jev call: state `{ jobs: [{ title, alt, host }] }`, one noul question per item `trainee_<i>`. Pool of 3 calls. Reason: ~20 calls for a cold board, small payloads. Rows mid Finnish run skipped so no row pays twice.
 - Verdict from score with existing `thresholds` (`yes`, `no`). `yes` and `no` are final, `src: "title"`.
-- Stage 2, JD for `unclear` only. Relay fetch first link via background `relay` pool (5). Reuse `scanBlocks` and JSON-LD path from `badge.judge`, `pickDescription` when no JSON-LD. One item per call, state `{ title, text }`, text capped at `CAP`. Result final, `src: "jd"`.
+- Stage 2, JD for `unclear` only. Text from JD cache, else same `source` fetch as Finnish run (and cached). One item per call, state `{ title, text }`, text capped at `CAP`. Result final, `src` = JD src (`page` or `tab`). Old entries keep `src: "jd"`. Reason: old stage 2 refetched the page and bypassed the JD cache.
 - Skip stage 2 for hosts that need login or block fetch: `linkedin.com`, `indeed.com`. Those keep `unclear` from stage 1. Reason: fetch returns auth wall, wastes a call and gives wrong text.
-- Fetch or parse failure: keep stage-1 `unclear` with `src: "title"` and cache it. Reason: retry on every visit costs more than one missed row. Clear cache retries.
+- No JD text: keep stage-1 `unclear` with `src: "title"` and cache it. Reason: retry on every visit costs more than one missed row. Clear cache retries.
 - Translator offline: progress line shows "Translator offline", rows not hidden by Jev filter, no retry loop. Same rule as spec 04.
 - Question, judged on criteria, not keywords. Reason: titles say trainee, harjoittelija, graduate, launchpad, academy, summer job, kesätyö, or nothing at all.
 
@@ -94,7 +95,7 @@ const trainee: NoulQuestion = {
   type: "noul",
   instructions: {
     question: "Is this a trainee or graduate entry role?",
-    input: "Job title, link text and host. For JD stage, `text` is the job description, possibly cut.",
+    input: "Job title, link text and host. With a JD, `title` is the job title and `text` the job description, possibly cut or empty.",
     note: "Judge the purpose of the role, not the words used. A trainee role hires students, fresh graduates or people about to graduate, trains them on the job, and aims to keep them in the company. Names vary: trainee, harjoittelija, graduate program, launchpad, academy, summer job, kesätyö, thesis worker, internship, junior program. Junior or entry-level roles that come with a structured training path count. A plain junior role with no training path does not. Roles that demand years of experience do not.",
   },
   criteria: {
@@ -112,9 +113,9 @@ Reason: user never wants Finnish-required jobs, same as duunitori. Board links p
 - Reset returns to defaults, so "No Finnish" stays on. Reset button shows only when filters differ from defaults.
 
 ### Judge
-- Reuse `checkFast` from core, `requires_finnish` question as is. Explicit statement only. JD written in Finnish is not evidence. No new question.
-- Same call returns `requires_experience`. Cache both as labels `finnish` and `experience`, version 2. Reason for v2: v1 rows from the removed render window were judged on wrong text (Lokki relay job scored 0.05, cached JD scores 0.95). Bump rejudges from JD cache, no refetch. Only `finnish` gets a row tag. `experience` shows in the info tooltip. Reason: free, avoids relabel when experience filter comes.
-- `question` optional on `Label`. Finnish and experience have none, `checkFast` asks both in one call.
+- Reuse core `FAST.finnish` question (same as `checkFast`). Explicit statement only. JD written in Finnish is not evidence. No new question.
+- Core `FAST.experience` asked in the same call. Cache both as labels `finnish` and `experience`, version 2. Reason for v2: v1 rows from the removed render window were judged on wrong text (Lokki relay job scored 0.05, cached JD scores 0.95). Bump rejudges from JD cache, no refetch. Only `finnish` gets a row tag. `experience` shows in the info tooltip. Reason: free, avoids relabel when experience filter comes.
+- Finnish and experience carry the core questions on their `Label`, so the merged call asks them like any label. Reason: one JD call per job, see "One call per job".
 - JD only. No title stage. Reason: titles never state language demands.
 - Text: `extract(html)` first (JSON-LD, else `pickDescription`). Extract null: fall back to whole page text, `body.innerText`, whitespace collapsed, nav/header/footer/script/style removed, cut at `CAP`. Reason: unknown portals, pick can miss, whole DOM still holds the language line.
 - Duunitori links: use `badge:<url>` cache when present, no fetch, no Jev, `src: "page"`, no score. Result also written back to `badge:<url>`. `score` optional on `Entry` for this and failed rows; tooltip line drops the number.
@@ -126,7 +127,7 @@ Changed: auto render window removed. Reason: popping a window on page load made 
   - `linkedin.com`: job id from `/jobs/view/<id>` or `currentJobId=<id>`. Fetch `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/<id>`. Guest endpoint, no login, returns JD HTML. Reason: ~200 rows, login wall blocks the plain link.
   - `tyomarkkinatori.fi`: SPA. Fetch `https://tyomarkkinatori.fi/api/jobposting-new/v1/public/jobpostings/<uuid>`, public, no auth. Text = `position.title` + `jobDescription` + `marketingDescription`, all languages. Reason: ~40 rows, plain fetch gives empty shell.
 - 400 rule checked on whole page text first. Under 400 and no JSON-LD: fail before `pickDescription`. Picked description under 400 but page longer: judge whole page text. Reason: shells and short picks must not spend a call.
-- Text 400 chars or more: judge. Under 400, fetch fails or non-2xx: no Jev call. Cache `unclear`, `src: "none"`, issue "Fetch · text too short" or "Fetch · HTTP 403" etc. Reason: judging a shell wastes a call and gives a false verdict.
+- Text 400 chars or more: judge. Under 400, fetch fails or non-2xx: no JD Jev call. Cache `unclear`, `src: "none"`, issue "Fetch · text too short" or "Fetch · HTTP 403" etc. Reason: judging a shell wastes a call and gives a false verdict. Title-only labels (senior, staff, manager, trainee) still asked in one call with `text: ""`.
 - `indeed.com`: no adapter. Bot wall. Ends as failed row with issue. Accepted.
 
 ### Try in tab
@@ -134,7 +135,7 @@ Reason: lets user test failed portals by hand and see if a render path is worth 
 - Failed rows (`src: "none"`) show a "Try in tab" text button at the bottom of the info tooltip, `--primary`, 12 px.
 - Click: background opens `tabs.create({ url, active: false, windowId: <board tab window> })` in the user's current window, next to the board tab. No new window.
 - Tab: wait `status: "complete"`, 2 s settle, `scripting.executeScript` returns `outerHTML`, close tab. Cap 20 s. One at a time.
-- Same text rule (400 chars) and same judge. Success replaces the cache entry, `src: "tab"`, keeps old issues plus "Tab · ok". Failure keeps `src: "none"`, adds "Tab · <error>". Reason: button stays, user can retry.
+- Same text rule (400 chars) and same judge. Success replaces the cache entry, `src: "tab"`, keeps old issues plus "Tab · ok". Same call also asks `yoe` and any label still missing. Reason: JD sent once, seniority run would otherwise resend it. Failure keeps `src: "none"`, adds "Tab · <error>". Reason: button stays, user can retry.
 - Tooltip is hoverable so the button is clickable. Keyboard focus not reachable yet, tooltip sits at end of `body`. Accepted for now. Row tag and tooltip update live.
 - While running: button text "Trying…", disabled. Done: tooltip shows result line.
 - Message `{ type: "render", url }` stays. Background renderer drops the worker window and uses the sender tab's `windowId`. Manifest keeps `scripting`.
@@ -153,6 +154,7 @@ Reason: lets user test failed portals by hand and see if a render path is worth 
 - `yes`: "Finnish required", `--primary` text, 1 px `--primary` stroke.
 - `no`: "No Finnish", `--muted-foreground` text, `--border` stroke.
 - `unclear`: "Finnish unclear", same as `no`.
+- "No Finnish" chip on (and not removed view): `no` rows get no tag. Reason: every shown row is No Finnish then, tag is noise. Only Finnish has a row tag, so no other chip needs this.
 - Not labeled yet: no tag. Rescan re-adds tags after site remounts, same as remove button.
 
 ### Info icon
@@ -184,7 +186,7 @@ Reason: user wants roles open to people with up to 4 years of experience. Hide 5
 Four separate labels, version 1 each: `yoe`, `senior`, `staff`, `manager`. Each has its own chip. `manager` added later: user wants no manager, director or executive roles.
 
 ### Judge
-- One Jev call per row, state `{ title, text }`, text from JD cache or fetch. Ask only labels that miss in cache. Reason: one call per row, no repeat spend.
+- One Jev call per row, state `{ title, text }`, text from JD cache or fetch. Ask only labels that miss in cache. Reason: one call per row, no repeat spend. New rows get these in the Finnish run call, see "One call per job". Seniority run only covers rows still missing a label.
 - Questions in `lib/labels.ts` as registry entries with `question`. Give Jev criteria, never a list of signal words. Reason: signal lists make Jev too strict and keyword bound. Criteria let it judge the whole JD.
 - A long list of tech skills is not a seniority signal. Say so once in each note. Reason: user saw JDs with many skills that are still junior friendly.
 - Failed rows (no text): `senior`, `staff` and `manager` judged from title alone, `src: "title"`. `yoe` stays unlabeled. Reason: titles often say senior or staff, years need a JD.
@@ -257,6 +259,23 @@ const staff: NoulQuestion = {
 ### Info icon
 - Tooltip lists the three new labels like the others: "5+ yrs · no (0.12) · page", "Senior · yes (0.91) · title", "Staff · no (0.08) · page".
 
+## One call per job
+Reason: same JD went to Jev up to 3 times per new job (Finnish, seniority, trainee stage 2). Tokens wasted.
+- Finnish run sends JD once per row, one `questions` map with every label missing in cache: `finnish`, `experience`, `yoe`, `senior`, `staff`, `manager`, `developer`, plus `trainee` when the row gets a call anyway. State `{ title, text }`, text cut at `CAP`.
+- Cache stays per label, `cache.put` per label, versions unchanged. Only transport merges. Finnish question now sees `title` too, its `input` says so. Accepted risk.
+- No text: title-only call with `senior`, `staff`, `manager`, `trainee`. `finnish` fails as before (`src: "none"`, issues), `experience` `unclear`/`none`, `yoe` and `developer` unasked.
+- Backfill is generic: a new label or version bump is a cache miss. Seniority run asks only the missing questions on the cached JD (`jd:<id>`), no page fetch on a JD hit.
+- Jev error: Finnish fails with "Jev" issue, other labels left for the seniority run (title only).
+- Duunitori badge hit: Finnish and experience from badge, rest asked on JD.
+- Trace flows unchanged: `agilefant-finnish`, `agilefant-seniority`, `agilefant-title`, `agilefant-jd`.
+
+## Developer label
+Reason: user wants only roles that build software. Titles often just say "trainee", so judged from the JD.
+- Label `developer`, version 1, noul, same thresholds. Criteria: building software is the main duty. Broad on kind (web, mobile, backend, embedded, games, ML/AI, data pipelines, platform, SRE, test automation), strict on main duty. Use, sell, support, manage, design-only, BI-only, helpdesk, hardware-only are not. No seniority check. Examples illustrative, not a keyword list.
+- JD only. Rows with no text never ask it, stay unlabeled. Reason: title alone too weak, "trainee" says nothing about the work.
+- New rows: rides in the merged Finnish run call. Old rows: seniority run backfills it alone on cached JD.
+- Chip "Developer" after "Trainee", default off. On: hides rows with `developer` `no`. `unclear`, failed and unlabeled rows stay. Reason: same as hide chips, never hide on a guess. Off by default: new filter, user opts in.
+
 ## Later filters
 - Same shape: one `Label` entry, one sidebar option, one predicate. No new cache keys, no new UI plumbing.
 - Candidates: "No experience required" from the `experience` label cached by the Finnish run.
@@ -267,7 +286,11 @@ const staff: NoulQuestion = {
 - Unit: cache. Version mismatch is a miss. Debounced write sends one `set`. Clear empties memory and storage.
 - Unit: facet counts with other groups applied.
 - Unit: trainee batch builds 40-item chunks and maps answers back by index.
-- Unit: stage 2 skipped for linkedin and indeed hosts.
+- Unit: stage 2 skipped for linkedin and indeed hosts. Stage 2 reads JD cache, no fetch, null and no Jev call without text.
+- Unit: one Jev request per job carrying all missing labels, text capped. Seniority run after it sends nothing.
+- Unit: No Finnish tag dropped while chip on, back when off.
+- Unit: developer asked in merged call for new rows. Backfill of a missing label sends exactly that one question on cached JD, no page fetch. Developer chip off by default, hides only `no`.
+- Unit: Source sorted by shown count, zero hidden unless checked, "Show N more" counts hidden only.
 - Fixture: saved board HTML from `agilefant.org/p/<token>` in `test/fixtures/agilefant.html`.
 - Unit: removed view shows only removed rows, normal view drops them. Row button added once, label flips in removed view.
 - Unit: Finnish source. LinkedIn link maps to guest URL. Text under 400 gives failed row with issue and no Jev call. Try in tab result replaces entry with `src: "tab"`.

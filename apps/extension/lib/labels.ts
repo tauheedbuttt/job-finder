@@ -1,6 +1,6 @@
-import { CAP, jev, thresholds as limits, type FinnishOptions, type NoulQuestion } from "@job-finder/core";
+import { FAST, jev, thresholds as limits, type FinnishOptions, type NoulQuestion } from "@job-finder/core";
 import { host, type Item } from "./agilefant";
-import { extract, type Level } from "./badge";
+import type { Level } from "./badge";
 import { pool } from "./pool";
 import { trace } from "./trace";
 
@@ -19,7 +19,7 @@ const trainee: Asked = {
     type: "noul",
     instructions: {
       question: "Is this a trainee or graduate entry role?",
-      input: "Job title, link text and host. For JD stage, `text` is the job description, possibly cut.",
+      input: "Job title, link text and host. With a JD, `title` is the job title and `text` the job description, possibly cut or empty.",
       note: "Judge the purpose of the role, not the words used. A trainee role hires students, fresh graduates or people about to graduate, trains them on the job, and aims to keep them in the company. Names vary: trainee, harjoittelija, graduate program, launchpad, academy, summer job, kesätyö, thesis worker, internship, junior program. Junior or entry-level roles that come with a structured training path count. A plain junior role with no training path does not. Roles that demand years of experience do not.",
     },
     criteria: {
@@ -29,10 +29,10 @@ const trainee: Asked = {
   },
 };
 
-// Judged by core checkFast in one call, so these carry no own question.
+// Core checkFast questions, asked in the merged JD call.
 // v2: v1 rows judged by the removed render window on wrong text, rejudged from the JD cache.
-const finnish: Label = { name: "finnish", version: 2 };
-const experience: Label = { name: "experience", version: 2 };
+const finnish: Asked = { name: "finnish", version: 2, question: FAST.finnish };
+const experience: Asked = { name: "experience", version: 2, question: FAST.experience };
 
 // Criteria only, no signal word lists: lists make Jev keyword bound and too strict.
 const yoe: Asked = {
@@ -103,7 +103,25 @@ const manager: Asked = {
   },
 };
 
-export const labels = { trainee, finnish, experience, yoe, senior, staff, manager } satisfies Record<string, Label>;
+// JD only: titles often just say trainee. Strict on building software as the main duty, broad on the kind.
+const developer: Asked = {
+  name: "developer",
+  version: 1,
+  question: {
+    type: "noul",
+    instructions: {
+      question: "Is this a software developer or engineering role, where the person builds software?",
+      input: "`title` is the job title. `text` is the job description in its original language, possibly cut.",
+      note: "Judge the main duty, not the words used. Any part of building software counts: writing code for web, mobile, backend, embedded or games, building ML or AI systems, data pipelines, infrastructure as code, platform or reliability work, test automation. Examples are illustrative, not a list to match. Roles that only use, sell, support, manage or design around software do not count, nor hardware work with no software. Seniority and years do not matter here.",
+    },
+    criteria: {
+      true: "Building software is the main duty of the role.",
+      false: "The role uses, sells, supports, manages or designs around software, or is not a software role at all.",
+    },
+  },
+};
+
+export const labels = { trainee, finnish, experience, yoe, senior, staff, manager, developer } satisfies Record<string, Label>;
 
 export const KEY = "labels:agilefant";
 export const BATCH = 40;
@@ -199,29 +217,12 @@ export function skip(url: string): boolean {
   return !h || WALLED.some((w) => h === w || h.endsWith(`.${w}`));
 }
 
-// Null when the page cannot be fetched or holds no description; Jev errors throw.
-export async function deep(item: Item, label: Asked, opts: FinnishOptions, page: typeof fetch): Promise<Verdict | null> {
-  let html: string;
-  try {
-    const res = await page(item.url);
-    if (!res.ok) return null;
-    html = await res.text();
-  } catch {
-    return null;
-  }
-  const text = await extract(html, opts);
-  if (text === null) return null;
-  const questions: Record<string, NoulQuestion> = { [label.name]: label.question };
-  const { answers } = await jev({ title: item.title, text: text.slice(0, CAP) }, questions, opts);
-  const score = answers[label.name]!.noul;
-  return { verdict: level(score, opts), score, src: "jd" };
-}
-
 export type Run = {
   label: Asked;
   cache: Cache;
   opts: FinnishOptions;
-  page: typeof fetch;
+  // JD verdict for a title-unclear row, null when no text.
+  deep: (item: Item) => Promise<Verdict | null>;
   session: string;
   url: string;
   mark: (id: string, verdict: Verdict) => void;
@@ -267,7 +268,7 @@ export async function run(list: Item[], r: Run): Promise<void> {
       two(async () => {
         if (r.stop()) return;
         try {
-          keep(item, (await deep(item, r.label, { ...r.opts, headers: trace("agilefant-jd", r.session, item.url) }, r.page)) ?? first);
+          keep(item, (await r.deep(item)) ?? first);
         } catch (err) {
           soft(err);
         }

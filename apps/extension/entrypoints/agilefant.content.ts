@@ -1,7 +1,8 @@
 import { blank, counts, flip, items, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
-import { grade, missing, order, retry, run as scan, wipe } from "@/lib/finnish";
+import { deep, grade, missing, order, retry, run as scan, wipe } from "@/lib/finnish";
 import { CSS as INFO, mark, tips, type Known } from "@/lib/info";
 import { cache, labels, run, type Issue } from "@/lib/labels";
+import type { Level } from "@/lib/badge";
 import { trace } from "@/lib/trace";
 import { relayed } from "@/lib/relay";
 import { rendered } from "@/lib/render";
@@ -157,10 +158,11 @@ export default defineContentScript({
       trying.add(id);
       update();
       try {
-        const got = await retry(item, memo.get(id, finnish)?.issues ?? [], rendered, { ...opts(), headers: trace("agilefant-finnish", session, item.url) });
+        // Retry asks every label the row lacks, so its JD goes out once.
+        const want = [labels.yoe, labels.developer, ...missing(id, memo), trainee].filter((l) => !memo.get(id, l));
+        const got = await retry(item, want, memo.get(id, finnish)?.issues ?? [], rendered, { ...opts(), headers: trace("agilefant-finnish", session, item.url) });
         if (turn === mine) {
-          memo.put(id, finnish, got.finnish);
-          memo.put(id, labels.experience, got.experience);
+          for (const [l, v] of got) memo.put(id, l, v);
           void assess();
         }
       } catch (err) {
@@ -169,6 +171,8 @@ export default defineContentScript({
       trying.delete(id);
       update();
     }
+    // No Finnish filter on means every shown row is No Finnish, so that tag is noise.
+    const quiet = (): Level[] => (filters.finnish && !trash ? ["no"] : []);
     const refresh = tips(facts, (id) => void attempt(id));
 
     const ctx = () => ({
@@ -180,6 +184,7 @@ export default defineContentScript({
       senior: (id: string) => memo.get(id, labels.senior)?.verdict,
       staff: (id: string) => memo.get(id, labels.staff)?.verdict,
       manager: (id: string) => memo.get(id, labels.manager)?.verdict,
+      developer: (id: string) => memo.get(id, labels.developer)?.verdict,
       offline,
     });
 
@@ -206,7 +211,7 @@ export default defineContentScript({
         unlabeled: live.some((i) => !memo.get(i.id, trainee)),
       });
       decorate(document, trash);
-      mark(document, facts);
+      mark(document, facts, quiet());
       refresh();
       tools.render(Object.keys(gone).length, trash);
     }
@@ -227,15 +232,15 @@ export default defineContentScript({
       void label();
     }
 
-    // Labels only run while a Jev filter is on, and only for cache misses.
+    // Title batch only while the trainee filter is on, for judged rows the merged JD call left without trainee.
     async function label() {
       if (!filters.trainee || offline) return;
       if (running) {
         again = true;
         return;
       }
-      const list = kept([...known.values()], gone);
-      if (list.every((i) => memo.get(i.id, trainee))) return;
+      const list = kept([...known.values()], gone).filter((i) => memo.get(i.id, finnish) && !memo.get(i.id, trainee));
+      if (!list.length) return;
       const mine = ++epoch;
       running = true;
       again = false;
@@ -244,8 +249,8 @@ export default defineContentScript({
         await run(list, {
           label: trainee,
           cache: memo,
-          opts: { base: settings.url, fetch: relayed, thresholds: settings },
-          page: relayed,
+          opts: opts(),
+          deep: (item) => deep(item, { page: relayed, opts: { ...opts(), headers: trace("agilefant-jd", session, item.url) } }),
           session,
           url: location.href.split("#")[0]!,
           mark: update,
@@ -303,7 +308,10 @@ export default defineContentScript({
       for (const i of list) if (!memo.get(i.id, finnish)) notes.set(i.id, [{ step: "finnish", message: "not labeled", at: Date.now() }]);
       update();
       if (more) void judge();
-      else void assess();
+      else {
+        void assess();
+        void label();
+      }
     }
 
     // Seniority labels run after the Finnish run, same order and offline rule.
@@ -347,7 +355,7 @@ export default defineContentScript({
       pending = setTimeout(() => {
         const next = items(document);
         decorate(document, trash);
-        mark(document, facts);
+        mark(document, facts, quiet());
         tools.render(Object.keys(gone).length, trash);
         if (next.map((i) => i.id).join() === rows.map((i) => i.id).join()) return;
         const fresh = next.some((i) => !known.has(i.id));

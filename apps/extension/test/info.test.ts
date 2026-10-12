@@ -43,6 +43,20 @@ describe("info", () => {
     expect(rows[2]!.querySelector("[data-jf-tag]")).toBeNull();
   });
 
+  it("drops the tag for quiet verdicts and brings it back after", () => {
+    const one = new DOMParser().parseFromString(html, "text/html");
+    const id = items(one)[0]!.id;
+    const no = (): Known => ({ entries: { finnish: { v: 2, verdict: "no", score: 0.1, src: "page" } }, notes: [] });
+    const row = () => one.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+    mark(one, (x) => (x === id ? no() : { entries: {}, notes: [] }));
+    expect(row().querySelector("[data-jf-tag]")!.textContent).toBe("No Finnish");
+    mark(one, (x) => (x === id ? no() : { entries: {}, notes: [] }), ["no"]);
+    expect(row().querySelector("[data-jf-tag]")).toBeNull();
+    expect(row().querySelector("[data-jf-info]")).not.toBeNull();
+    mark(one, (x) => (x === id ? no() : { entries: {}, notes: [] }));
+    expect(row().querySelector("[data-jf-tag]")!.textContent).toBe("No Finnish");
+  });
+
   it("lists label lines then issue lines", () => {
     expect(lines(facts[list[0]!.id]!)).toEqual({
       labels: ["Finnish · required (0.91) · page", "Trainee · yes (0.88) · title"],

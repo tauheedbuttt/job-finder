@@ -1,10 +1,10 @@
-import { CAP, checkFast, jev, type FinnishOptions, type NoulQuestion } from "@job-finder/core";
+import { CAP, jev, type FinnishOptions, type NoulQuestion } from "@job-finder/core";
 import { host, type Item } from "./agilefant";
 import { cached, extract, remember } from "./badge";
 import { labels, level, type Asked, type Cache, type Entry, type Issue, type Verdict } from "./labels";
 import type { Rendered } from "./messages";
 import { pool } from "./pool";
-import { trace } from "./trace";
+import { trace, type Flow } from "./trace";
 
 export const MIN = 400;
 const DROP = "nav,header,footer,script,style,noscript,template,svg";
@@ -12,7 +12,6 @@ const LD = /application\/ld\+json/i;
 
 export type Deps = { page: typeof fetch; opts: FinnishOptions };
 export type Text = { text: string | null; issues: Issue[] };
-export type Pair = { finnish: Verdict; experience: Verdict };
 export type Jd = { text: string; src: "page" | "tab"; at: number };
 
 export const JD = "jd:";
@@ -128,38 +127,67 @@ export async function text(item: Item, d: Deps): Promise<Found> {
   if (got.text) await keep(item.id, got.text, "page");
   return { ...got, src: "page" };
 }
-const fail = (issues: Issue[]): Pair => ({ finnish: { verdict: "unclear", src: "none", issues }, experience: { verdict: "unclear", src: "none" } });
 
-// Jev errors become an issue; only TypeError (translator offline) escapes.
-async function judge(url: string, text: string, opts: FinnishOptions, src: Entry["src"], issues: Issue[]): Promise<Pair> {
+export type Got = Array<[Asked, Verdict]>;
+
+const { finnish, experience, yoe, trainee, developer } = labels;
+// Labels that need a JD; a row with no text never asks them.
+const DEEP: Asked[] = [finnish, experience, yoe, developer];
+const fail = (issues: Issue[]): Got => [
+  [finnish, { verdict: "unclear", src: "none", issues }],
+  [experience, { verdict: "unclear", src: "none" }],
+];
+
+// One Jev call with every wanted label; no text means title only. Jev errors fail the Finnish entry; only TypeError (translator offline) escapes.
+async function pose(item: Item, want: Asked[], body: string | null, src: Entry["src"], issues: Issue[], opts: FinnishOptions): Promise<Got> {
+  const out: Got = body || !want.includes(finnish) ? [] : fail(issues);
+  const ask = body ? want : want.filter((l) => !DEEP.includes(l));
+  if (!ask.length) return out;
   try {
-    const { finnish, experience } = await checkFast({ text }, opts);
-    if (duunitori(url)) await remember(url, { finnish: finnish.verdict, experience: experience.verdict }).catch(() => undefined);
-    const some = issues.length ? { issues } : {};
-    return { finnish: { ...finnish, src, ...some }, experience: { ...experience, src } };
+    const questions: Record<string, NoulQuestion> = Object.fromEntries(ask.map((l) => [l.name, l.question]));
+    const { answers } = await jev({ title: item.title, text: (body ?? "").slice(0, CAP) }, questions, opts);
+    const got: Got = ask.map((l) => {
+      const score = answers[l.name]!.noul;
+      const some = l === finnish && issues.length ? { issues } : {};
+      return [l, { verdict: level(score, opts), score, src: body ? src : "title", ...some }];
+    });
+    const v = (l: Asked) => got.find(([x]) => x === l)?.[1].verdict;
+    const [fi, ex] = [v(finnish), v(experience)];
+    if (fi && ex && duunitori(item.url)) await remember(clean(item.url), { finnish: fi, experience: ex }).catch(() => undefined);
+    return [...out, ...got];
   } catch (err) {
     if (err instanceof TypeError) throw err;
-    return fail([...issues, issue("jev", reason(err))]);
+    return body && want.includes(finnish) ? fail([...issues, issue("jev", reason(err))]) : out;
   }
 }
 
-export async function check(item: Item, d: Deps): Promise<Pair> {
+// One Jev call per row for every wanted label. Duunitori badge hits skip Jev for Finnish and experience.
+export async function answer(item: Item, want: Asked[], d: Deps, bare = false): Promise<Got> {
   const url = clean(item.url);
-  const hit = duunitori(url) ? await cached(url).catch(() => null) : null;
-  if (hit) return { finnish: { verdict: hit.finnish, src: "page" }, experience: { verdict: hit.experience, src: "page" } };
-  let got: Found;
-  try {
-    got = await text(item, d);
-  } catch (err) {
-    if (err instanceof TypeError) throw err;
-    return fail([issue("extract", reason(err))]);
+  const out: Got = [];
+  let rest = want;
+  const hit = want.includes(finnish) && duunitori(url) ? await cached(url).catch(() => null) : null;
+  if (hit) {
+    out.push([finnish, { verdict: hit.finnish, src: "page" }], [experience, { verdict: hit.experience, src: "page" }]);
+    rest = rest.filter((l) => l !== finnish && l !== experience);
   }
-  return got.text ? judge(url, got.text, d.opts, got.src, got.issues) : fail(got.issues);
+  if (!rest.length) return out;
+  let got: Found = { text: null, src: "page", issues: [] };
+  if (!bare) {
+    try {
+      got = await text(item, d);
+    } catch (err) {
+      if (err instanceof TypeError) throw err;
+      got = { text: null, src: "page", issues: [issue("extract", reason(err))] };
+    }
+  }
+  return [...out, ...(await pose(item, rest, got.text, got.src, got.issues, d.opts))];
 }
 
 // Try in tab: success gives src "tab"; a failure keeps src "none" so the button stays for another try.
-export async function retry(item: Item, old: Issue[], render: (url: string) => Promise<Rendered>, opts: FinnishOptions): Promise<Pair> {
+export async function retry(item: Item, want: Asked[], old: Issue[], render: (url: string) => Promise<Rendered>, opts: FinnishOptions): Promise<Got> {
   const url = clean(item.url);
+  const ask = [...new Set([finnish, experience, ...want])];
   const got = await render(url);
   if (!got.ok) return fail([...old, issue("tab", got.error)]);
   let text: string;
@@ -171,7 +199,20 @@ export async function retry(item: Item, old: Issue[], render: (url: string) => P
   }
   if (text.length < MIN) return fail([...old, issue("tab", "text too short")]);
   await keep(item.id, text, "tab");
-  return judge(url, text, opts, "tab", [...old, issue("tab", "ok")]);
+  return pose(item, ask, text, "tab", [...old, issue("tab", "ok")], opts);
+}
+
+// Trainee from the JD for a title-unclear row; null when there is no text.
+export async function deep(item: Item, d: Deps): Promise<Verdict | null> {
+  let got: Found;
+  try {
+    got = await text(item, d);
+  } catch (err) {
+    if (err instanceof TypeError) throw err;
+    return null;
+  }
+  if (!got.text) return null;
+  return (await pose(item, [trainee], got.text, got.src, [], d.opts))[0]?.[1] ?? null;
 }
 
 // Rows on screen first, the rest keep board order.
@@ -181,76 +222,52 @@ export function order(list: Item[], seen: (id: string) => boolean): Item[] {
 
 export type Run = { cache: Cache; deps: Deps; session: string; mark: (id: string) => void; stop: () => boolean };
 
-export async function run(list: Item[], r: Run): Promise<void> {
-  const one = pool(3);
-  await Promise.all(
-    list
-      .filter((i) => !r.cache.get(i.id, labels.finnish))
-      .map((item) =>
-        one(async () => {
-          if (r.stop()) return;
-          const got = await check(item, { ...r.deps, opts: { ...r.deps.opts, headers: trace("agilefant-finnish", r.session, item.url) } });
-          // Late answers after a stop or cache clear are dropped.
-          if (r.stop()) return;
-          r.cache.put(item.id, labels.finnish, got.finnish);
-          r.cache.put(item.id, labels.experience, got.experience);
-          r.mark(item.id);
-        }),
-      ),
-  );
-}
-
 export const SENIORITY: Asked[] = [labels.yoe, labels.senior, labels.staff, labels.manager];
+export const JUDGED: Asked[] = [finnish, experience, ...SENIORITY, developer];
 
-const failed = (id: string, c: Cache) => c.get(id, labels.finnish)?.src === "none";
+const failed = (id: string, c: Cache) => c.get(id, finnish)?.src === "none";
 
-// Labels a row still lacks; failed rows have no text, so years stay unasked.
+// Labels a row still lacks; failed rows have no text, so JD-only labels stay unasked.
 export function missing(id: string, c: Cache): Asked[] {
-  const want = SENIORITY.filter((l) => !c.get(id, l));
-  return failed(id, c) ? want.filter((l) => l !== labels.yoe) : want;
+  const want = JUDGED.filter((l) => !c.get(id, l));
+  return failed(id, c) ? want.filter((l) => !DEEP.includes(l)) : want;
 }
 
-// One Jev call per row; no text means title only and no years question.
-export async function rank(item: Item, want: Asked[], d: Deps, bare = false): Promise<Array<[Asked, Verdict]>> {
-  let got: Found | null = null;
-  if (!bare) {
-    try {
-      got = await text(item, d);
-    } catch (err) {
-      if (err instanceof TypeError) throw err;
-    }
-  }
-  const body = got?.text ?? null;
-  const ask = body ? want : want.filter((l) => l !== labels.yoe);
-  if (!ask.length) return [];
-  const questions: Record<string, NoulQuestion> = Object.fromEntries(ask.map((l) => [l.name, l.question]));
-  const { answers } = await jev({ title: item.title, text: body ?? "" }, questions, d.opts);
-  const src = body ? got!.src : "title";
-  return ask.map((l) => {
-    const score = answers[l.name]!.noul;
-    return [l, { verdict: level(score, d.opts), score, src }];
-  });
+// Trainee rides along free when a row gets a call anyway.
+export function wanted(id: string, c: Cache): Asked[] {
+  const want = missing(id, c);
+  return want.length && !c.get(id, trainee) ? [...want, trainee] : want;
 }
 
-export async function grade(list: Item[], r: Run): Promise<void> {
+async function sweep(list: Item[], r: Run, flow: Flow): Promise<void> {
   const one = pool(3);
   await Promise.all(
     list.map((item) =>
       one(async () => {
         if (r.stop()) return;
-        const want = missing(item.id, r.cache);
+        const want = wanted(item.id, r.cache);
         if (want.length) {
-          try {
-            const got = await rank(item, want, { ...r.deps, opts: { ...r.deps.opts, headers: trace("agilefant-seniority", r.session, item.url) } }, failed(item.id, r.cache));
-            // Late answers after a stop or cache clear are dropped.
-            if (r.stop()) return;
-            for (const [l, v] of got) r.cache.put(item.id, l, v);
-          } catch (err) {
-            if (err instanceof TypeError) throw err;
-          }
+          const got = await answer(item, want, { ...r.deps, opts: { ...r.deps.opts, headers: trace(flow, r.session, item.url) } }, failed(item.id, r.cache));
+          // Late answers after a stop or cache clear are dropped.
+          if (r.stop()) return;
+          for (const [l, v] of got) r.cache.put(item.id, l, v);
         }
         r.mark(item.id);
       }),
     ),
   );
+}
+
+// Finnish run: rows with no Finnish entry, every missing label in the same call.
+export async function run(list: Item[], r: Run): Promise<void> {
+  await sweep(
+    list.filter((i) => !r.cache.get(i.id, finnish)),
+    r,
+    "agilefant-finnish",
+  );
+}
+
+// Seniority run: rows that still miss a label after the Finnish run.
+export async function grade(list: Item[], r: Run): Promise<void> {
+  await sweep(list, r, "agilefant-seniority");
 }

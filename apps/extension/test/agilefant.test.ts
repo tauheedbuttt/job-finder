@@ -115,6 +115,19 @@ describe("facets", () => {
   });
 });
 
+describe("developer chip", () => {
+  const list = ["a", "b", "c", "d"].map((id) => item(id));
+  const c = { ...ctx(), developer: (id: string) => ({ a: "yes", b: "no", c: "unclear" })[id] as "yes" | "no" | "unclear" | undefined };
+
+  it("is off by default and hides only no rows when on", () => {
+    expect(blank.developer).toBe(false);
+    expect(visible(list, blank, c)).toHaveLength(4);
+    expect(visible(list, { ...blank, developer: true }, c).map((i) => i.id)).toEqual(["a", "c", "d"]);
+    expect(counts(list, blank, c).developer).toBe(3);
+    expect(active({ ...blank, developer: true })).toBe(true);
+  });
+});
+
 describe("seniority chips", () => {
   const list = ["a", "b", "c", "d"].map((id) => item(id));
   const tags = { a: "yes", b: "no", c: "unclear" } as Record<string, "yes" | "no" | "unclear">;

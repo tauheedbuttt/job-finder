@@ -6,7 +6,8 @@ import Settings from "./Settings";
 export default function App() {
   const [settings, setSettings] = useState<Values>(defaults);
   const [access, setAccess] = useState(true);
-  const [view, setView] = useState<"filters" | "settings">("filters");
+  // A backup tab opens straight on settings.
+  const [view, setView] = useState<"filters" | "settings">(location.hash === "#tab" ? "settings" : "filters");
 
   useEffect(() => {
     void load().then(setSettings);
@@ -31,7 +32,7 @@ export default function App() {
         </section>
       )}
       {view === "settings" ? (
-        <Settings settings={settings} store={(next) => void store(next)} back={() => setView("filters")} />
+        <Settings settings={settings} store={(next) => void store(next)} back={() => setView("filters")} reload={() => void load().then(setSettings)} />
       ) : (
         <section>
           <header className="head">

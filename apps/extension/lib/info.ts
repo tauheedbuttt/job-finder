@@ -59,13 +59,14 @@ export function tip(k: Known, id = ""): string {
   return body && id ? `<b>Job</b><div data-jf-id>${esc(id.split("::").pop()!)}</div>${body}` : body;
 }
 
-// Adds or syncs the Finnish tag and info icon after site remounts; writes only on change.
-export function mark(root: ParentNode, look: (id: string) => Known): void {
+// Adds or syncs the Finnish tag and info icon after site remounts; writes only on change. Quiet verdicts get no tag.
+export function mark(root: ParentNode, look: (id: string) => Known, quiet: Level[] = []): void {
   for (const row of root.querySelectorAll<HTMLElement>(ROWS)) {
     const id = row.dataset.itemId ?? "";
     const k = look(id);
     const doc = row.ownerDocument;
-    const verdict = k.entries.finnish?.verdict;
+    const got = k.entries.finnish?.verdict;
+    const verdict = got && !quiet.includes(got) ? got : undefined;
     let tag = row.querySelector<HTMLElement>("[data-jf-tag]");
     const link = row.querySelector("a[href]");
     if (!verdict || !link) tag?.remove();

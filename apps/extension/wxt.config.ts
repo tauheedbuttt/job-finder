@@ -4,6 +4,8 @@ const sizes = [16, 32, 48, 128];
 
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  // Fixed port per browser: a drifting port left popup.html and the manifest CSP on different servers, so the popup loaded blank.
+  dev: { server: { port: process.env.BROWSER === "firefox" ? 3101 : 3100, strictPort: true } },
   manifest: ({ browser }) => ({
     name: "Job Finder",
     description: "Checks duunitori jobs for Finnish and experience, translates titles and descriptions.",

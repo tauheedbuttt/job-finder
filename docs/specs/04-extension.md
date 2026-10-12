@@ -12,6 +12,12 @@ Reason for change: side panel unused, user wants a popup with toggles instead.
   - Settings view: own component `Settings.tsx`. Gear click opens it, header gets back arrow plus "Settings". Translator URL (default `http://localhost:8790`) as text input. Thresholds `yes` and `no` as sliders 0 to 1, step 0.05, value shown right of label. `yes` slider min clamps to `no` + 0.05, `no` max to `yes` - 0.05. Reset button. `span` dropped from UI. Reason: highlights gone.
   - Reason for views: user wants settings out of the filter screen, sliders over number inputs.
   - Popup reopens on Filters view. No view memory.
+  - Settings view, "Data" group under Reset: Export and Import buttons. Reason: labels, JD texts, removed rows and settings must survive extension removal.
+    - Export: whole `storage.local` and `storage.sync` as `job-finder-backup-YYYY-MM-DD.json`, shape `{ app: "job-finder", version: 1, at, local, sync }`.
+    - Import: zod checks shape, then `storage.set` per area. Imported keys overwrite same keys, others kept. Status line "Imported N keys, M new. Reload open boards to see them." Bad file: "Import failed: <reason>". Open boards pick it up on reload.
+    - Logic in `lib/backup.ts` (`pack`, `parse`, `merge`, `dump`, `restore`). UI only wires buttons.
+    - Firefox: popup closes when a file picker opens. Both buttons open `popup.html#tab` in a tab, which starts on Settings. Chrome works in the popup.
+- Dev server port fixed, strict: 3100 chrome, 3101 firefox. Reason: popup came up as an empty blob. Dev `popup.html` loaded scripts from `localhost:3003` while manifest CSP allowed `localhost:3002` (port drifted across dev restarts), so no script and no CSS ran. A dev build also needs the dev server running. `popup.html` holds a fallback line, shown after 1 s if the app never mounts.
 - All values in `chrome.storage.local` key `settings`. `Settings` gains `hideExperienced: boolean`. Popup saves on change, no save button.
 - List script reads settings at start and listens `storage.onChanged`. Toggle applies live, no reload. URL and thresholds apply on page reload. Detail script reads once, no toggle there.
 - Translate cache: memory `Map` plus `chrome.storage.local`, key `tr:<text>`, TTL 30 days. Shared by list and detail scripts. Missing storage falls back to memory.
@@ -69,5 +75,6 @@ Reason: user wants same extension in Zen browser. Zen is Firefox-based, so one F
 - Unit: experience filter. `yes` card hidden, toggle off unhides, `unclear` stays. Finnish `yes` removal checked by manual checklist.
 - Unit: host access. `granted` false when missing, `grant` requests `<all_urls>`.
 - Unit: settings load fills `hideExperienced` false when missing.
+- Unit: backup. Pack name and shape, parse rejects bad JSON, other app, other version. Restore overwrites same keys, keeps others, counts new.
 - Unit: detail page fixture. Leaf block collection, translate replace, restore original. Title span added once.
 - Manual checklist in `docs/`.

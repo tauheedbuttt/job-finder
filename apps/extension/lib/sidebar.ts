@@ -89,6 +89,14 @@ const CHEVRON = `<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stro
 const FUNNEL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg>`;
 const TOP_HOSTS = 6;
 
+// Hosts by shown count, zero counts dropped unless checked; hidden = rows past the top that a click on more reveals.
+export function hosts(v: Pick<View, "sources" | "counts" | "filters">): { list: string[]; hidden: number } {
+  const n = (h: string) => v.counts[`host:${h}`] ?? 0;
+  const on = (h: string) => v.filters.hosts.includes(h);
+  const list = v.sources.filter((h) => n(h) > 0 || on(h)).sort((a, b) => n(b) - n(a) || a.localeCompare(b));
+  return { list, hidden: list.filter((h, i) => i >= TOP_HOSTS && !on(h)).length };
+}
+
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function sidebar(actions: Actions, shut: string[] = []) {
@@ -149,21 +157,21 @@ export function sidebar(actions: Actions, shut: string[] = []) {
   function render(v: View) {
     last = v;
     const f = v.filters;
-    const top = all ? v.sources : v.sources.filter((h, i) => i < TOP_HOSTS || f.hosts.includes(h));
-    const rest = v.sources.length - TOP_HOSTS;
+    const { list, hidden } = hosts(v);
+    const top = all ? list : list.filter((h, i) => i < TOP_HOSTS || f.hosts.includes(h));
     const now = root.activeElement instanceof HTMLElement && panel.contains(root.activeElement) ? root.activeElement : null;
     const focus = now ? `[data-act="${now.dataset.act}"]${now.dataset.key === undefined ? "" : `[data-key="${now.dataset.key}"]`}` : null;
     panel.innerHTML = [
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       status(v),
-      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("week", "New this week", f.week)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
+      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("developer", "Developer", f.developer)}${chip("week", "New this week", f.week)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
       progress(v),
       group(
         "source",
         "Source",
         top.map((h) => check(`host:${h}`, h.replace(/^www\./, ""), v, f.hosts.includes(h))).join("") +
-          (rest > 0 ? `<button class="more" data-act="more">${all ? "Show less" : `Show ${rest} more`}</button>` : ""),
+          (hidden > 0 ? `<button class="more" data-act="more">${all ? "Show less" : `Show ${hidden} more`}</button>` : ""),
       ),
       foot(v),
     ].join("");

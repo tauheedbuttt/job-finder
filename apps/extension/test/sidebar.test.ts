@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { blank } from "../lib/agilefant";
-import { sidebar, type View } from "../lib/sidebar";
+import { hosts, sidebar, type View } from "../lib/sidebar";
 
 const view: View = {
   filters: blank,
@@ -17,6 +17,22 @@ const view: View = {
 };
 
 describe("sidebar", () => {
+  it("sorts sources by shown count, hides zero unless checked, counts only hidden for more", () => {
+    const names = ["a.fi", "b.fi", "c.fi", "d.fi", "e.fi", "f.fi", "g.fi", "h.fi", "z.fi", "y.fi"];
+    const counts = Object.fromEntries(names.map((h, i) => [`host:${h}`, i < 8 ? i + 1 : 0]));
+    counts["host:b.fi"] = 8;
+    const got = hosts({ sources: names, counts, filters: { ...blank, hosts: ["z.fi", "a.fi"] } });
+    expect(got.list).toEqual(["b.fi", "h.fi", "g.fi", "f.fi", "e.fi", "d.fi", "c.fi", "a.fi", "z.fi"]);
+    expect(got.hidden).toBe(1);
+    const bar = sidebar({ toggle: vi.fn(), reset: vi.fn(), clear: vi.fn(), fold: vi.fn() });
+    bar.render({ ...view, sources: names, counts, filters: { ...blank, hosts: ["z.fi", "a.fi"] } });
+    const root = bar.host.shadowRoot!;
+    const shown = [...root.querySelectorAll<HTMLElement>('[data-key^="host:"]')].map((el) => el.dataset.key);
+    expect(shown).toEqual(["host:b.fi", "host:h.fi", "host:g.fi", "host:f.fi", "host:e.fi", "host:d.fi", "host:a.fi", "host:z.fi"]);
+    expect(root.querySelector('[data-act="more"]')!.textContent).toBe("Show 1 more");
+    expect(root.querySelector('[data-key="host:y.fi"]')).toBeNull();
+  });
+
   it("renders counts and sends toggles", () => {
     const toggle = vi.fn();
     const bar = sidebar({ toggle, reset: vi.fn(), clear: vi.fn(), fold: vi.fn() });
@@ -49,7 +65,7 @@ describe("sidebar", () => {
     const bar = sidebar({ toggle: vi.fn(), reset: vi.fn(), clear: vi.fn(), fold: vi.fn() });
     bar.render(view);
     const root = bar.host.shadowRoot!;
-    expect([...root.querySelectorAll(".chip")].map((c) => c.textContent)).toEqual(["No Finnish", "Max 4 yrs", "No senior", "No staff", "No manager", "Trainee", "New this week"]);
+    expect([...root.querySelectorAll(".chip")].map((c) => c.textContent)).toEqual(["No Finnish", "Max 4 yrs", "No senior", "No staff", "No manager", "Trainee", "Developer", "New this week"]);
     expect([...root.querySelectorAll(".fold")].map((f) => f.textContent)).toEqual(["Source"]);
   });
 

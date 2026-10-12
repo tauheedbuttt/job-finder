@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAP, checkFast, checkFinnish } from "../src/index";
+import { CAP, checkFast, checkFinnish, FAST } from "../src/index";
 import { noul, transport } from "./mock";
 
 const sentences = [
@@ -149,6 +149,14 @@ describe("checkFast", () => {
   it("honours custom thresholds", async () => {
     const out = await checkFast({ text: "x" }, { fetch: transport(two(0.25)).fetch, thresholds: { no: 0.2 } });
     expect(out.finnish.verdict).toBe("unclear");
+  });
+
+  it("shares its questions for merged calls", async () => {
+    const mock = transport(two(0.1));
+    await checkFast({ text: "x" }, { fetch: mock.fetch });
+    const { questions } = mock.calls[0]!.body;
+    expect(questions).toEqual(JSON.parse(JSON.stringify({ requires_finnish: FAST.finnish, requires_experience: FAST.experience })));
+    expect(JSON.stringify(FAST.finnish.instructions)).toContain("`title`, when present");
   });
 
   it("truncates long text to the cap", async () => {

@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { CAP } from "@job-finder/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "../lib/agilefant";
-import { adapt, check, grade, MIN, order, plain, retry, run, source, wipe, type Deps } from "../lib/finnish";
-import { cache, labels, type Issue } from "../lib/labels";
+import { adapt, answer, deep, grade, MIN, order, plain, retry, run, source, wipe, type Deps, type Got } from "../lib/finnish";
+import { cache, labels, type Issue, type Verdict } from "../lib/labels";
 import type { Rendered } from "../lib/messages";
 
 const fixture = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
@@ -59,6 +60,8 @@ function deps(page: string | Error | number, p = 0.9) {
 }
 
 const steps = (list: Issue[] | undefined) => list!.map((i) => [i.step, i.message]);
+const pair = (got: Got) => Object.fromEntries(got.map(([l, v]) => [l.name, v])) as { finnish: Verdict; experience: Verdict };
+const check = async (i: Item, d: Deps) => pair(await answer(i, [labels.finnish, labels.experience], d));
 
 describe("finnish source", () => {
   it("uses the fetch when the text is long enough", async () => {
@@ -114,7 +117,7 @@ describe("try in tab", () => {
   it("replaces the entry with src tab and keeps old issues", async () => {
     const { mock } = deps(LONG);
     const render = vi.fn(async (): Promise<Rendered> => ({ ok: true, html: LONG }));
-    const got = await retry(item("https://jobs.example.fi/1#x"), old, render, { fetch: mock.fetch });
+    const got = pair(await retry(item("https://jobs.example.fi/1#x"), [], old, render, { fetch: mock.fetch }));
     expect(render).toHaveBeenCalledWith("https://jobs.example.fi/1");
     expect(got.finnish).toMatchObject({ verdict: "yes", score: 0.9, src: "tab" });
     expect(got.experience.src).toBe("tab");
@@ -133,7 +136,7 @@ describe("try in tab", () => {
   it("records a tab error and stays failed with no Jev call", async () => {
     const { mock } = deps(LONG);
     for (const shown of [{ ok: false, error: "timed out after 20 s" }, { ok: true, html: SHELL }] as Rendered[]) {
-      const got = await retry(item("https://jobs.example.fi/1"), old, async () => shown, { fetch: mock.fetch });
+      const got = pair(await retry(item("https://jobs.example.fi/1"), [], old, async () => shown, { fetch: mock.fetch }));
       expect(got.finnish).toMatchObject({ verdict: "unclear", src: "none" });
       expect(steps(got.finnish.issues)[1]![0]).toBe("tab");
     }
@@ -142,15 +145,31 @@ describe("try in tab", () => {
 });
 
 describe("finnish check", () => {
-  it("judges the page with checkFast and caches finnish plus experience", async () => {
+  it("sends the JD once per job with every missing label in one call", async () => {
     const { d, mock } = deps(LONG);
     const c = cache();
     await c.load();
-    await run([item("https://jobs.example.fi/1")], { cache: c, deps: d, session: "s", mark: vi.fn(), stop: () => false });
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["requires_finnish", "requires_experience"]);
-    expect(mock.calls[0]!.headers["x-jf-flow"]).toBe("agilefant-finnish");
+    const list = [item("https://jobs.example.fi/1"), item("https://jobs.example.fi/2", 1)];
+    c.put("b::wi-1", labels.senior, { verdict: "no", score: 0.1, src: "page" });
+    await run(list, { cache: c, deps: d, session: "s", mark: vi.fn(), stop: () => false });
+    expect(mock.calls).toHaveLength(2);
+    const [one, two] = [0, 1].map((i) => mock.calls.find((x) => x.state.title === `Job ${i}`)!);
+    expect(Object.keys(one!.questions)).toEqual(["finnish", "experience", "yoe", "senior", "staff", "manager", "developer", "trainee"]);
+    expect(Object.keys(two!.questions)).toEqual(["finnish", "experience", "yoe", "staff", "manager", "developer", "trainee"]);
+    expect(JSON.stringify(one!.questions.finnish.instructions)).toContain("explicitly ask for Finnish");
+    expect(one!.state).toEqual({ title: "Job 0", text: (store["jd:b::wi-0"] as { text: string }).text });
+    expect(one!.headers["x-jf-flow"]).toBe("agilefant-finnish");
     expect(c.get("b::wi-0", labels.finnish)).toEqual({ v: labels.finnish.version, verdict: "yes", score: 0.9, src: "page" });
-    expect(c.get("b::wi-0", labels.experience)?.verdict).toBe("yes");
+    for (const l of Object.values(labels)) expect(c.get("b::wi-0", l)?.verdict).toBe("yes");
+    await grade(list, { cache: c, deps: d, session: "s", mark: vi.fn(), stop: () => false });
+    expect(mock.calls).toHaveLength(2);
+  });
+
+  it("caps the JD text sent to Jev", async () => {
+    store["jd:b::wi-0"] = { text: "x".repeat(9000), src: "page", at: 1 };
+    const { d, mock } = deps(LONG);
+    await answer(item("https://jobs.example.fi/1"), [labels.finnish], d);
+    expect(mock.calls[0]!.state.text).toHaveLength(CAP);
   });
 
   it("uses the duunitori badge cache with no fetch and no Jev call", async () => {
@@ -220,6 +239,22 @@ describe("jd cache", () => {
   });
 });
 
+describe("trainee jd", () => {
+  it("reads the JD cache with no fetch and asks trainee only", async () => {
+    store["jd:b::wi-0"] = { text: "x".repeat(500), src: "tab", at: 1 };
+    const { d, mock } = deps(LONG, 0.95);
+    expect(await deep(item("https://jobs.example.fi/1"), d)).toEqual({ verdict: "yes", score: 0.95, src: "tab" });
+    expect(d.page).not.toHaveBeenCalled();
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["trainee"]);
+  });
+
+  it("gives null and no Jev call without text", async () => {
+    const { d, mock } = deps(403);
+    expect(await deep(item("https://jobs.example.fi/1"), d)).toBeNull();
+    expect(mock.calls).toHaveLength(0);
+  });
+});
+
 describe("seniority", () => {
   const go = (c: ReturnType<typeof cache>, d: Deps, mark = vi.fn()) => grade([item("https://jobs.example.fi/1")], { cache: c, deps: d, session: "s", mark, stop: () => false });
 
@@ -228,11 +263,13 @@ describe("seniority", () => {
     const { d, mock } = deps(LONG, 0.95);
     const c = cache();
     await c.load();
+    c.put("b::wi-0", labels.finnish, { verdict: "no", score: 0.1, src: "page" });
+    c.put("b::wi-0", labels.experience, { verdict: "no", score: 0.1, src: "page" });
     c.put("b::wi-0", labels.senior, { verdict: "no", score: 0.1, src: "page" });
     const mark = vi.fn();
     await go(c, d, mark);
     expect(mock.calls).toHaveLength(1);
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["yoe", "staff", "manager"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["yoe", "staff", "manager", "developer", "trainee"]);
     expect(mock.calls[0]!.state).toEqual({ title: "Job 0", text: "x".repeat(500) });
     expect(mock.calls[0]!.headers["x-jf-flow"]).toBe("agilefant-seniority");
     expect(c.get("b::wi-0", labels.yoe)).toEqual({ v: 1, verdict: "yes", score: 0.95, src: "page" });
@@ -243,6 +280,20 @@ describe("seniority", () => {
     expect(mock.calls).toHaveLength(1);
   });
 
+  it("backfills a new label with exactly one question on the cached JD, no page fetch", async () => {
+    store["jd:b::wi-0"] = { text: "y".repeat(500), src: "page", at: 1 };
+    const { d, mock } = deps(LONG, 0.95);
+    const c = cache();
+    await c.load();
+    for (const l of Object.values(labels)) if (l !== labels.developer) c.put("b::wi-0", l, { verdict: "no", score: 0.1, src: "page" });
+    await go(c, d);
+    expect(d.page).not.toHaveBeenCalled();
+    expect(mock.calls).toHaveLength(1);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["developer"]);
+    expect(mock.calls[0]!.state).toEqual({ title: "Job 0", text: "y".repeat(500) });
+    expect(c.get("b::wi-0", labels.developer)).toEqual({ v: 1, verdict: "yes", score: 0.95, src: "page" });
+  });
+
   it("judges senior and staff from the title on failed rows and leaves yoe unlabeled", async () => {
     const { d, mock } = deps(LONG, 0.95);
     const c = cache();
@@ -250,7 +301,7 @@ describe("seniority", () => {
     c.put("b::wi-0", labels.finnish, { verdict: "unclear", src: "none", issues: [] });
     await go(c, d);
     expect(d.page).not.toHaveBeenCalled();
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager", "trainee"]);
     expect(mock.calls[0]!.state).toEqual({ title: "Job 0", text: "" });
     expect(c.get("b::wi-0", labels.senior)).toMatchObject({ verdict: "yes", src: "title" });
     expect(c.get("b::wi-0", labels.staff)?.src).toBe("title");
@@ -264,7 +315,8 @@ describe("seniority", () => {
     const c = cache();
     await c.load();
     await go(c, d);
-    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager"]);
+    expect(Object.keys(mock.calls[0]!.questions)).toEqual(["senior", "staff", "manager", "trainee"]);
     expect(c.get("b::wi-0", labels.yoe)).toBeUndefined();
+    expect(c.get("b::wi-0", labels.finnish)).toMatchObject({ src: "none" });
   });
 });

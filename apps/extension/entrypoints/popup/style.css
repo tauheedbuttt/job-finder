@@ -235,3 +235,17 @@ h2 {
   background: none;
   accent-color: var(--fg);
 }
+
+.group {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}

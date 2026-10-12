@@ -4,9 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Job Finder</title>
+    <style>
+      .boot { width: 260px; margin: 14px; font: 13px system-ui, sans-serif; animation: boot 0s 1s both; }
+      @keyframes boot { from { visibility: hidden; } to { visibility: visible; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown only when the app script never runs, such as a dev build with its server stopped. -->
+    <div id="root"><p class="boot">Job Finder did not load. A dev build needs <code>pnpm dev</code> running.</p></div>
     <script type="module" src="./main.tsx"></script>
   </body>
 </html>
