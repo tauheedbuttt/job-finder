@@ -6,9 +6,9 @@ import { trace } from "./trace";
 
 export type Label = { name: string; version: number; question?: NoulQuestion };
 export type Asked = Label & { question: NoulQuestion };
-export type Issue = { step: "fetch" | "render" | "extract" | "jev" | (string & {}); message: string; at: number };
+export type Issue = { step: "fetch" | "render" | "tab" | "extract" | "jev" | (string & {}); message: string; at: number };
 // Score is absent when the verdict came without one: duunitori badge cache or a failed row.
-export type Entry = { v: number; verdict: Level; score?: number; src: "title" | "jd" | "page" | "none"; issues?: Issue[] };
+export type Entry = { v: number; verdict: Level; score?: number; src: "title" | "jd" | "page" | "tab" | "none"; issues?: Issue[] };
 export type Verdict = Omit<Entry, "v">;
 
 // Judged on criteria, not keywords: titles name trainee roles in many ways or not at all.
@@ -33,7 +33,59 @@ const trainee: Asked = {
 const finnish: Label = { name: "finnish", version: 1 };
 const experience: Label = { name: "experience", version: 1 };
 
-export const labels = { trainee, finnish, experience } satisfies Record<string, Label>;
+// Criteria only, no signal word lists: lists make Jev keyword bound and too strict.
+const yoe: Asked = {
+  name: "yoe",
+  version: 1,
+  question: {
+    type: "noul",
+    instructions: {
+      question: "Does this job demand five or more years of work experience?",
+      input: "`title` is the job title. `text` is the job description in its original language, possibly cut.",
+      note: "Judge the minimum the employer demands. Four years or less is not five. Experience named only as a plus does not count. A long list of skills or tools is not a years demand.",
+    },
+    criteria: {
+      true: "The minimum demanded experience is five years or more.",
+      false: "The demand is four years or less, or no years are demanded.",
+    },
+  },
+};
+
+const senior: Asked = {
+  name: "senior",
+  version: 1,
+  question: {
+    type: "noul",
+    instructions: {
+      question: "Is this a senior level role?",
+      input: "`title` is the job title. `text` is the job description, possibly cut or empty.",
+      note: "Judge the level the employer hires for, from the title and from what the job expects of the person. A long list of skills or tools alone does not make a role senior. Junior, mid level and entry roles are not senior.",
+    },
+    criteria: {
+      true: "The employer hires an experienced senior person, by title or by demanding about five or more years or senior level expectations.",
+      false: "The role is open to junior or mid level people.",
+    },
+  },
+};
+
+const staff: Asked = {
+  name: "staff",
+  version: 1,
+  question: {
+    type: "noul",
+    instructions: {
+      question: "Is this a staff or principal level role?",
+      input: "`title` is the job title. `text` is the job description, possibly cut or empty.",
+      note: "Judge the scope the role holds. Staff level means technical leadership beyond one team. A long list of skills alone does not make a role staff. Company staff or personnel used in another sense does not count.",
+    },
+    criteria: {
+      true: "The role is staff or principal level, with technical leadership across teams.",
+      false: "The role works inside one team at junior, mid or senior level.",
+    },
+  },
+};
+
+export const labels = { trainee, finnish, experience, yoe, senior, staff } satisfies Record<string, Label>;
 
 export const KEY = "labels:agilefant";
 export const BATCH = 40;
@@ -104,7 +156,7 @@ export function chunks<T>(list: T[], size = BATCH): T[][] {
   return out;
 }
 
-function level(score: number, opts: FinnishOptions): Level {
+export function level(score: number, opts: FinnishOptions): Level {
   const t = limits.parse(opts.thresholds ?? {});
   return score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear";
 }

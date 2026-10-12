@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { blank, counts, flip, items, sources, style, visible, type Ctx, type Item } from "../lib/agilefant";
+import { active, blank, counts, flip, items, sources, style, visible, type Ctx, type Item } from "../lib/agilefant";
 
 const html = readFileSync(join(import.meta.dirname, "fixtures", "agilefant.html"), "utf8");
 
@@ -98,6 +98,36 @@ describe("facets", () => {
 
   it("hides nothing by role when the translator is offline", () => {
     expect(visible(list, { ...blank, trainee: true }, ctx({ b: "no" }, true))).toHaveLength(4);
+  });
+
+  it("hides Finnish-required rows by default and keeps unclear or unlabeled ones", () => {
+    const c = { ...ctx(), finnish: (id: string) => ({ a: "yes", b: "unclear", c: "no" })[id] as "yes" | "no" | "unclear" | undefined };
+    expect(visible(list, blank, c).map((i) => i.id)).toEqual(["b", "c", "d"]);
+    expect(counts(list, blank, c).finnish).toBe(3);
+    expect(visible(list, { ...blank, finnish: false }, c)).toHaveLength(4);
+  });
+});
+
+describe("seniority chips", () => {
+  const list = ["a", "b", "c", "d"].map((id) => item(id));
+  const tags = { a: "yes", b: "no", c: "unclear" } as Record<string, "yes" | "no" | "unclear">;
+
+  it("are on by default", () => {
+    expect([blank.yoe, blank.senior, blank.staff]).toEqual([true, true, true]);
+  });
+
+  for (const key of ["yoe", "senior", "staff"] as const) {
+    it(`${key} hides only its yes rows`, () => {
+      const c = { ...ctx(), [key]: (id: string) => tags[id] };
+      expect(visible(list, blank, c).map((i) => i.id)).toEqual(["b", "c", "d"]);
+      expect(counts(list, blank, c)[key]).toBe(3);
+      expect(visible(list, { ...blank, [key]: false }, c)).toHaveLength(4);
+      expect(active({ ...blank, [key]: false })).toBe(true);
+    });
+  }
+
+  it("leaves reset hidden on defaults", () => {
+    expect(active(blank)).toBe(false);
   });
 });
 

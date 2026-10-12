@@ -3,6 +3,10 @@ import type { Level } from "./badge";
 export type Item = { id: string; title: string; url: string; alt: string; host: string; deadline: string | null; created: string | null };
 
 export type Filters = {
+  finnish: boolean;
+  yoe: boolean;
+  senior: boolean;
+  staff: boolean;
   trainee: boolean;
   unclear: boolean;
   deadline: boolean;
@@ -12,11 +16,18 @@ export type Filters = {
   hosts: string[];
 };
 
-export const blank: Filters = { trainee: false, unclear: false, deadline: false, closing: false, week: false, month: false, hosts: [] };
+// No Finnish and seniority chips start on, so those rows hide by default.
+export const blank: Filters = { finnish: true, yoe: true, senior: true, staff: true, trainee: false, unclear: false, deadline: false, closing: false, week: false, month: false, hosts: [] };
 
-export type Ctx = { today: string; verdict: (id: string) => Level | undefined; offline: boolean };
+type Look = (id: string) => Level | undefined;
 
-type Group = "role" | "deadline" | "added" | "source";
+export type Ctx = { today: string; verdict: Look; finnish?: Look; yoe?: Look; senior?: Look; staff?: Look; offline: boolean };
+
+type Hide = "finnish" | "yoe" | "senior" | "staff";
+type Group = "language" | "yoe" | "senior" | "staff" | "role" | "deadline" | "added" | "source";
+
+// Groups that hide only rows whose label says yes.
+const HIDES: Record<Hide, Group> = { finnish: "language", yoe: "yoe", senior: "senior", staff: "staff" };
 
 export const ROWS = "ul.space-y-px > li > [data-item-id]";
 
@@ -77,7 +88,13 @@ function role(i: Item, f: Filters, c: Ctx): boolean {
   return v === "yes" || (f.unclear && v === "unclear");
 }
 
+const clear = (k: Hide, i: Item, c: Ctx) => c[k]?.(i.id) !== "yes";
+
 const GROUPS: Record<Group, (i: Item, f: Filters, c: Ctx) => boolean> = {
+  language: (i, f, c) => !f.finnish || clear("finnish", i, c),
+  yoe: (i, f, c) => !f.yoe || clear("yoe", i, c),
+  senior: (i, f, c) => !f.senior || clear("senior", i, c),
+  staff: (i, f, c) => !f.staff || clear("staff", i, c),
   // Unlabeled rows stay until Jev answers, offline hides nothing.
   role: (i, f, c) => !f.trainee || c.offline || c.verdict(i.id) === undefined || role(i, f, c),
   deadline: (i, f, c) => (!f.deadline && !f.closing) || (f.deadline && OPTIONS.deadline(i)) || (f.closing && OPTIONS.closing(i, c)),
@@ -95,9 +112,10 @@ export function visible(list: Item[], f: Filters, c: Ctx): Item[] {
 
 // Each option counts rows it would match with every other group applied.
 export function counts(list: Item[], f: Filters, c: Ctx): Record<string, number> {
-  const out: Record<string, number> = { trainee: 0, deadline: 0, closing: 0, week: 0, month: 0 };
+  const out: Record<string, number> = { finnish: 0, yoe: 0, senior: 0, staff: 0, trainee: 0, deadline: 0, closing: 0, week: 0, month: 0 };
   for (const i of list) out[`host:${i.host}`] ??= 0;
   for (const i of list) {
+    for (const [k, g] of Object.entries(HIDES) as Array<[Hide, Group]>) if (passes(i, f, c, g) && clear(k, i, c)) out[k]!++;
     if (passes(i, f, c, "role") && role(i, f, c)) out.trainee!++;
     if (passes(i, f, c, "deadline")) {
       if (OPTIONS.deadline(i)) out.deadline!++;
@@ -113,10 +131,10 @@ export function counts(list: Item[], f: Filters, c: Ctx): Record<string, number>
 }
 
 export function active(f: Filters): boolean {
-  return f.trainee || f.deadline || f.closing || f.week || f.month || f.hosts.length > 0;
+  return !f.finnish || !f.yoe || !f.senior || !f.staff || f.trainee || f.deadline || f.closing || f.week || f.month || f.hosts.length > 0;
 }
 
-export type Key = "trainee" | "unclear" | "deadline" | "closing" | "week" | "month" | `host:${string}`;
+export type Key = Hide | "trainee" | "unclear" | "deadline" | "closing" | "week" | "month" | `host:${string}`;
 
 export function flip(f: Filters, key: Key): Filters {
   if (!key.startsWith("host:")) return { ...f, [key]: !f[key as Exclude<Key, `host:${string}`>] };

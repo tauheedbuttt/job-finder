@@ -3,7 +3,6 @@ import { pool } from "./pool";
 
 const CAP = 20000;
 const SETTLE = 2000;
-const IDLE = 1000;
 
 const sleep = (ms: number) => new Promise((go) => setTimeout(go, ms));
 const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -34,37 +33,16 @@ function loaded(id: number): Promise<void> {
   });
 }
 
-// One minimized worker window, opened on demand and closed once the queue is idle.
-export function renderer(size = 2) {
-  const limit = pool(size);
-  let win: Promise<number> | null = null;
-  let queued = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined;
+type Sender = { tab?: { windowId?: number; index?: number } };
 
-  browser.windows.onRemoved.addListener(async (id) => {
-    if (win && (await win.catch(() => -1)) === id) win = null;
-  });
+// User clicked Try in tab: one inactive tab next to the board tab, one at a time.
+export function renderer() {
+  const limit = pool(1);
 
-  // Older Firefox rejects focused: false, minimized alone still keeps it out of the way.
-  const open = () =>
-    (win ??= browser.windows
-      .create({ state: "minimized", focused: false })
-      .catch(() => browser.windows.create({ state: "minimized" }))
-      .then((w) => w!.id!)
-      .catch((err) => {
-        win = null;
-        throw err;
-      }));
-
-  const close = () => {
-    const was = win;
-    win = null;
-    void was?.then((id) => browser.windows.remove(id)).catch(() => undefined);
-  };
-
-  async function one(url: string): Promise<Rendered> {
+  async function one(url: string, from: Sender): Promise<Rendered> {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    const made = open().then((windowId) => browser.tabs.create({ windowId, url, active: false }));
+    const at = from.tab?.index;
+    const made = browser.tabs.create({ url, active: false, windowId: from.tab?.windowId, ...(at === undefined ? {} : { index: at + 1 }) });
     const cap = new Promise<never>((_, fail) => (timer = setTimeout(() => fail(new Error(`timed out after ${CAP / 1000} s`)), CAP)));
     const work = made.then(async (tab) => {
       await loaded(tab.id!);
@@ -83,18 +61,10 @@ export function renderer(size = 2) {
     }
   }
 
-  return async (msg: Render): Promise<Rendered> => {
-    queued++;
-    clearTimeout(timer);
-    try {
-      return await limit(() => one(msg.url));
-    } finally {
-      if (!--queued) timer = setTimeout(close, IDLE);
-    }
-  };
+  return (msg: Render, from: Sender): Promise<Rendered> => limit(() => one(msg.url, from));
 }
 
-// Content side: asks the background to render the page in the worker window.
+// Content side: asks the background to render the page in a tab.
 export async function rendered(url: string): Promise<Rendered> {
   try {
     return (await browser.runtime.sendMessage({ type: "render", url } satisfies Render)) as Rendered;

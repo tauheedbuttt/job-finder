@@ -13,7 +13,7 @@ describe("info", () => {
   const facts: Record<string, Known> = {
     [list[0]!.id]: {
       entries: {
-        finnish: { v: 1, verdict: "yes", score: 0.91, src: "page", issues: [{ step: "fetch", message: "text too short, rendered instead", at }] },
+        finnish: { v: 1, verdict: "yes", score: 0.91, src: "page", issues: [{ step: "fetch", message: "text too short", at }] },
         trainee: { v: 1, verdict: "yes", score: 0.88, src: "title" },
       },
       notes: [],
@@ -46,11 +46,32 @@ describe("info", () => {
   it("lists label lines then issue lines", () => {
     expect(lines(facts[list[0]!.id]!)).toEqual({
       labels: ["Finnish · required (0.91) · page", "Trainee · yes (0.88) · title"],
-      issues: ["Fetch · text too short, rendered instead · 14:02"],
+      issues: ["Fetch · text too short · 14:02"],
     });
     const out = tip(facts[list[0]!.id]!);
     expect(out.indexOf("Labels")).toBeLessThan(out.indexOf("Issues"));
     expect(tip(facts[list[1]!.id]!)).not.toContain("Labels");
     expect(lines(facts[list[1]!.id]!).issues).toEqual(["Finnish · not labeled · 14:02"]);
+  });
+
+  it("names the seniority labels", () => {
+    const k: Known = {
+      entries: {
+        yoe: { v: 1, verdict: "no", score: 0.12, src: "page" },
+        senior: { v: 1, verdict: "yes", score: 0.91, src: "title" },
+        staff: { v: 1, verdict: "no", score: 0.08, src: "page" },
+      },
+      notes: [],
+    };
+    expect(lines(k).labels).toEqual(["5+ yrs · no (0.12) · page", "Senior · yes (0.91) · title", "Staff · no (0.08) · page"]);
+  });
+
+  it("offers Try in tab only on failed Finnish rows, disabled while trying", () => {
+    const failed: Known = { entries: { finnish: { v: 1, verdict: "unclear", src: "none", issues: [{ step: "fetch", message: "HTTP 403", at }] } }, notes: [] };
+    expect(tip(facts[list[0]!.id]!)).not.toContain("data-jf-try");
+    expect(tip(failed)).toContain(">Try in tab</button>");
+    const busy = new DOMParser().parseFromString(tip({ ...failed, trying: true }), "text/html").querySelector("button")!;
+    expect(busy.textContent).toBe("Trying…");
+    expect(busy.disabled).toBe(true);
   });
 });

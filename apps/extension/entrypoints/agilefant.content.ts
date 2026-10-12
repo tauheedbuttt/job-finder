@@ -1,7 +1,8 @@
 import { blank, counts, flip, items, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
-import { order, run as scan } from "@/lib/finnish";
+import { grade, missing, order, retry, run as scan, wipe } from "@/lib/finnish";
 import { CSS as INFO, mark, tips, type Known } from "@/lib/info";
 import { cache, labels, run, type Issue } from "@/lib/labels";
+import { trace } from "@/lib/trace";
 import { relayed } from "@/lib/relay";
 import { rendered } from "@/lib/render";
 import { CSS, decorate, KEY as GONE, kept, pick, toast, toolbar, type Removed } from "@/lib/removed";
@@ -34,7 +35,8 @@ type Saved = Partial<Filters> & { folded?: string[] };
 async function restore(): Promise<{ filters: Filters; folded?: string[] }> {
   try {
     const { folded, ...got } = ((await browser.storage.local.get(KEY))[KEY] ?? {}) as Saved;
-    return { filters: { ...blank, ...got }, folded };
+    // Options without UI stay off so saved state never hides rows invisibly.
+    return { filters: { ...blank, ...got, unclear: false, deadline: false, closing: false, month: false }, folded };
   } catch {
     return { filters: { ...blank } };
   }
@@ -51,6 +53,8 @@ export default defineContentScript({
     const { trainee, finnish } = labels;
     // Memory-only issues, such as a row the Finnish run never labeled.
     const notes = new Map<string, Issue[]>();
+    // Rows with a Try in tab click in flight.
+    const trying = new Set<string>();
     // Every row ever seen, so rows hidden before a site search or Refresh stay hidden on remount.
     const known = new Map<string, Item>();
     let rows = items(document);
@@ -69,6 +73,11 @@ export default defineContentScript({
     let checking = false;
     let more = false;
     let turn = 0;
+    let ranking = false;
+    let extra = false;
+    let round = 0;
+    // Seniority progress: rows done and rows in the current run.
+    let ranked = { done: 0, total: 0 };
 
     const veil = document.createElement("style");
     veil.dataset.jfAgilefant = "";
@@ -86,10 +95,12 @@ export default defineContentScript({
         clear: async () => {
           epoch++;
           turn++;
+          round++;
           running = false;
           checking = false;
+          ranking = false;
           notes.clear();
-          await memo.clear();
+          await Promise.all([memo.clear(), wipe()]);
           update();
           void label();
           void judge();
@@ -135,12 +146,38 @@ export default defineContentScript({
     });
     bar.place();
 
-    const facts = (id: string): Known => ({ entries: memo.row(id), notes: notes.get(id) ?? [] });
-    tips(facts);
+    const facts = (id: string): Known => ({ entries: memo.row(id), notes: notes.get(id) ?? [], trying: trying.has(id) });
+    const opts = () => ({ base: settings.url, fetch: relayed, thresholds: settings });
+
+    // Try in tab: result replaces the Finnish entry, old issues kept.
+    async function attempt(id: string) {
+      const item = known.get(id);
+      if (!item || trying.has(id)) return;
+      const mine = turn;
+      trying.add(id);
+      update();
+      try {
+        const got = await retry(item, memo.get(id, finnish)?.issues ?? [], rendered, { ...opts(), headers: trace("agilefant-finnish", session, item.url) });
+        if (turn === mine) {
+          memo.put(id, finnish, got.finnish);
+          memo.put(id, labels.experience, got.experience);
+          void assess();
+        }
+      } catch (err) {
+        if (err instanceof TypeError) offline = true;
+      }
+      trying.delete(id);
+      update();
+    }
+    const refresh = tips(facts, (id) => void attempt(id));
 
     const ctx = () => ({
       today: today(),
       verdict: (id: string) => memo.get(id, trainee)?.verdict,
+      finnish: (id: string) => memo.get(id, finnish)?.verdict,
+      yoe: (id: string) => memo.get(id, labels.yoe)?.verdict,
+      senior: (id: string) => memo.get(id, labels.senior)?.verdict,
+      staff: (id: string) => memo.get(id, labels.staff)?.verdict,
       offline,
     });
 
@@ -161,12 +198,14 @@ export default defineContentScript({
         total: live.length,
         progress: running ? { done, total: all.length } : null,
         finnish: checking ? { done: open.filter((i) => memo.get(i.id, finnish)).length, total: open.length } : null,
+        seniority: ranking ? ranked : null,
         offline,
         cached: memo.size(),
         unlabeled: live.some((i) => !memo.get(i.id, trainee)),
       });
       decorate(document, trash);
       mark(document, facts);
+      refresh();
       tools.render(Object.keys(gone).length, trash);
     }
 
@@ -238,7 +277,7 @@ export default defineContentScript({
       }
       const view = seen();
       const list = order(kept([...known.values()], gone), (id) => view.has(id)).filter((i) => !memo.get(i.id, finnish));
-      if (!list.length) return;
+      if (!list.length) return void assess();
       const mine = ++turn;
       checking = true;
       more = false;
@@ -246,7 +285,7 @@ export default defineContentScript({
       try {
         await scan(list, {
           cache: memo,
-          deps: { page: relayed, render: rendered, opts: { base: settings.url, fetch: relayed, thresholds: settings } },
+          deps: { page: relayed, opts: opts() },
           session,
           mark: (id) => {
             notes.delete(id);
@@ -262,6 +301,42 @@ export default defineContentScript({
       for (const i of list) if (!memo.get(i.id, finnish)) notes.set(i.id, [{ step: "finnish", message: "not labeled", at: Date.now() }]);
       update();
       if (more) void judge();
+      else void assess();
+    }
+
+    // Seniority labels run after the Finnish run, same order and offline rule.
+    async function assess() {
+      if (offline || checking) return;
+      if (ranking) {
+        extra = true;
+        return;
+      }
+      const view = seen();
+      const list = order(kept([...known.values()], gone), (id) => view.has(id)).filter((i) => missing(i.id, memo).length);
+      if (!list.length) return;
+      const mine = ++round;
+      ranking = true;
+      extra = false;
+      ranked = { done: 0, total: list.length };
+      update();
+      try {
+        await grade(list, {
+          cache: memo,
+          deps: { page: relayed, opts: opts() },
+          session,
+          mark: () => {
+            ranked = { ...ranked, done: ranked.done + 1 };
+            update();
+          },
+          stop: () => round !== mine || offline,
+        });
+      } catch (err) {
+        if (err instanceof TypeError) offline = true;
+      }
+      if (round !== mine) return;
+      ranking = false;
+      update();
+      if (extra) void assess();
     }
 
     let pending: ReturnType<typeof setTimeout> | undefined;

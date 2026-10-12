@@ -8,6 +8,7 @@ export type View = {
   total: number;
   progress: { done: number; total: number } | null;
   finnish: { done: number; total: number } | null;
+  seniority: { done: number; total: number } | null;
   offline: boolean;
   cached: number;
   unlabeled: boolean;
@@ -60,8 +61,6 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cu
 .fold[aria-expanded=false] svg{transform:rotate(-90deg)}
 .check{display:flex;align-items:center;gap:10px;width:100%;height:32px;padding:0 8px;border-radius:calc(var(--radius, .5rem) - 2px);color:${FG};transition:background .12s ease}
 .check:hover{background:hsl(var(--accent, 340 50% 93%) / .6)}
-.check.sub{padding-left:32px;font-size:13px;color:${MUTED}}
-.check.sub[aria-checked=true]{color:${FG}}
 .box{flex:none;display:grid;place-items:center;width:16px;height:16px;border-radius:4px;border:1.5px solid ${BORDER};background:${BG};color:#fff;transition:background .12s ease,border-color .12s ease}
 .box svg{width:10px;height:10px;opacity:0}
 .check:hover .box{border-color:${MUTED}}
@@ -70,11 +69,9 @@ button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cu
 .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .count{color:${MUTED};font-size:12px;font-variant-numeric:tabular-nums}
 .check[aria-checked=true] .count{color:${FG};font-weight:500}
-.spin{width:12px;height:12px;border-radius:50%;border:1.5px solid ${BORDER};border-top-color:${PRIMARY};animation:spin .8s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
 .more{height:28px;margin-top:2px;padding:0 8px;color:${MUTED};font-size:13px;transition:color .12s ease}
 .more:hover{color:${FG}}
-.progress{padding:6px 8px 0 32px;color:${MUTED};font-size:12px;font-variant-numeric:tabular-nums}
+.progress{padding:8px 8px 0;color:${MUTED};font-size:12px;font-variant-numeric:tabular-nums}
 .bar{height:2px;margin-bottom:6px;border-radius:2px;background:${BORDER};overflow:hidden}
 .bar i{display:block;height:100%;background:${PRIMARY};transition:width .2s ease}
 .foot{margin-top:24px;padding:0 8px;font-size:12px;color:${MUTED};display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
@@ -94,7 +91,7 @@ const TOP_HOSTS = 6;
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]) {
+export function sidebar(actions: Actions, shut: string[] = []) {
   const host = document.createElement("div");
   host.dataset.jfSidebar = "";
   const root = host.attachShadow({ mode: "open" });
@@ -117,15 +114,8 @@ export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]
   let confirming = false;
   let last: View | null = null;
 
-  const count = (key: Key, view: View) =>
-    key === "trainee" && view.unlabeled
-      ? view.progress
-        ? `<span class="spin" aria-label="Checking"></span>`
-        : `<span class="count">-</span>`
-      : `<span class="count">${view.counts[key] ?? 0}</span>`;
-
-  const check = (key: Key, label: string, view: View, on: boolean, sub = false) =>
-    `<button class="check${sub ? " sub" : ""}" role="checkbox" aria-checked="${on}" data-act="toggle" data-key="${esc(key)}"><span class="box">${CHECK}</span><span class="label">${esc(label)}</span>${sub ? "" : count(key, view)}</button>`;
+  const check = (key: Key, label: string, view: View, on: boolean) =>
+    `<button class="check" role="checkbox" aria-checked="${on}" data-act="toggle" data-key="${esc(key)}"><span class="box">${CHECK}</span><span class="label">${esc(label)}</span><span class="count">${view.counts[key] ?? 0}</span></button>`;
 
   const chip = (key: Key, label: string, on: boolean) => `<button class="chip" aria-pressed="${on}" data-act="toggle" data-key="${key}">${label}</button>`;
 
@@ -141,10 +131,11 @@ export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]
     return `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div>Checking ${v.progress.done} of ${v.progress.total}</div>`;
   };
 
-  // Finnish run is not tied to a filter, so its state sits under the jobs line.
+  // Finnish and seniority runs are not tied to a filter, so their state sits under the jobs line.
   const status = (v: View) => {
     if (v.offline) return `<p class="meta">Translator offline</p>`;
-    return v.finnish ? `<p class="meta">Checking Finnish ${v.finnish.done} of ${v.finnish.total}</p>` : "";
+    if (v.finnish) return `<p class="meta">Checking Finnish ${v.finnish.done} of ${v.finnish.total}</p>`;
+    return v.seniority ? `<p class="meta">Checking seniority ${v.seniority.done} of ${v.seniority.total}</p>` : "";
   };
 
   const foot = (v: View) => {
@@ -166,10 +157,8 @@ export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       status(v),
-      `<div class="chips">${chip("trainee", "Trainee", f.trainee)}${chip("closing", "Closing soon", f.closing)}${chip("week", "New this week", f.week)}</div>`,
-      group("role", "Role type", check("trainee", "Trainee / graduate", v, f.trainee) + check("unclear", "Include unclear", v, f.unclear, true) + progress(v)),
-      group("deadline", "Deadline", check("deadline", "Has deadline", v, f.deadline) + check("closing", "Closing in 7 days", v, f.closing)),
-      group("added", "Added", check("week", "This week", v, f.week) + check("month", "Last 30 days", v, f.month)),
+      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("trainee", "Trainee", f.trainee)}${chip("week", "New this week", f.week)}</div>`,
+      progress(v),
       group(
         "source",
         "Source",

@@ -47,10 +47,15 @@ Open `https://agilefant.org/p/<token>` with the extension loaded and translator 
 - [ ] Reload: removed rows stay removed. Site search and Refresh keep × buttons on rows.
 - [ ] Load board, no filter on. Sidebar meta shows "Checking Finnish N of M". Rows on screen get tags first: "Finnish required" (pink stroke), "No Finnish" or "Finnish unclear" (grey). Line gone when done.
 - [ ] Mixed portals (jobly, thehub, tyomarkkinatori, company sites) get tags. Duunitori rows already seen on duunitori tag instantly, no Jev call.
-- [ ] Worker window opens minimized, never takes focus, no tabs flash in your window. Closes when queue is empty.
-- [ ] Logged in to LinkedIn: linkedin rows get a verdict, not only "Finnish unclear".
+- [ ] No tab or window opens on page load. Finnish run is fetch only.
+- [ ] Logged out of LinkedIn: linkedin rows get a verdict from the guest fetch, not only "Finnish unclear".
 - [ ] Info icon right of × on rows with any label or issue. Hover or Tab focus: tooltip left of icon, "Labels" lines then "Issues" lines. Issue rows have pink icon.
-- [ ] Row rendered after a short fetch shows issue "Fetch · text too short, rendered instead". Timed out row shows "Render · timed out after 20 s".
+- [ ] Failed row (shell, 403, Indeed) shows "Finnish unclear" and issue "Fetch · text too short" or "Fetch · HTTP 403". Tooltip ends with pink "Try in tab".
+- [ ] Click "Try in tab": button reads "Trying…", disabled. Inactive tab opens next to the board tab in the same window, no new window, focus stays. Tab closes within 20 s. Tooltip and tag update: "Tab · ok" with a `tab` label, or "Tab · <error>" and the button again.
 - [ ] Reload: tags and icons instant, no new Jev calls. Site search and Refresh keep tags and icons.
 - [ ] Stop translator, clear cache. Meta shows "Translator offline", run stops, no retry.
-- [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome. Finnish tags, minimized worker window and info tooltip work too.
+- [ ] After Finnish run, meta shows "Checking seniority N of M". Chips "Max 4 yrs", "No senior", "No staff" on by default, after "No Finnish". Each hides only its `yes` rows. Off: rows come back. Tooltip shows "5+ yrs", "Senior", "Staff" lines.
+- [ ] Failed row: tooltip has "Senior" and "Staff" with `title` source, no "5+ yrs" line.
+- [ ] Reload after a full run: no relay fetches for JD, seniority run reads `jd:*` from storage. DevTools storage shows `jd:<itemId>` keys.
+- [ ] Clear cache: `jd:*` keys gone from storage with labels. Finnish run fetches again.
+- [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome. Finnish tags, info tooltip and Try in tab work too.
