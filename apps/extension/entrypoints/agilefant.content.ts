@@ -1,6 +1,9 @@
-import { blank, counts, flip, items, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
-import { cache, labels, run } from "@/lib/labels";
+import { blank, counts, flip, items, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
+import { order, run as scan } from "@/lib/finnish";
+import { CSS as INFO, mark, tips, type Known } from "@/lib/info";
+import { cache, labels, run, type Issue } from "@/lib/labels";
 import { relayed } from "@/lib/relay";
+import { rendered } from "@/lib/render";
 import { CSS, decorate, KEY as GONE, kept, pick, toast, toolbar, type Removed } from "@/lib/removed";
 import { load } from "@/lib/settings";
 import { sidebar } from "@/lib/sidebar";
@@ -45,7 +48,9 @@ export default defineContentScript({
     const session = crypto.randomUUID();
     const memo = cache();
     await memo.load();
-    const { trainee } = labels;
+    const { trainee, finnish } = labels;
+    // Memory-only issues, such as a row the Finnish run never labeled.
+    const notes = new Map<string, Issue[]>();
     // Every row ever seen, so rows hidden before a site search or Refresh stay hidden on remount.
     const known = new Map<string, Item>();
     let rows = items(document);
@@ -61,11 +66,14 @@ export default defineContentScript({
     let again = false;
     let epoch = 0;
     let frame = 0;
+    let checking = false;
+    let more = false;
+    let turn = 0;
 
     const veil = document.createElement("style");
     veil.dataset.jfAgilefant = "";
     const look = document.createElement("style");
-    look.textContent = CSS;
+    look.textContent = CSS + INFO;
     document.head.append(veil, look);
 
     const remember = (list: Item[]) => list.forEach((i) => known.set(i.id, i));
@@ -77,10 +85,14 @@ export default defineContentScript({
         reset: () => change({ ...blank }),
         clear: async () => {
           epoch++;
+          turn++;
           running = false;
+          checking = false;
+          notes.clear();
           await memo.clear();
           update();
           void label();
+          void judge();
         },
         fold: (keys) => {
           folded = keys;
@@ -97,6 +109,8 @@ export default defineContentScript({
       if (trash && !Object.keys(gone).length) trash = false;
       keepGone();
       update();
+      // Restored rows may still lack a Finnish label.
+      if (!on) void judge();
     }
 
     const tools = toolbar({
@@ -109,6 +123,7 @@ export default defineContentScript({
 
     // One delegated listener survives React remounting the rows.
     document.addEventListener("click", (e) => {
+      if ((e.target as Element).closest("[data-jf-info]")) return void e.stopPropagation();
       const button = (e.target as Element).closest<HTMLElement>("[data-jf-remove]");
       const id = button?.dataset.jfRemove;
       if (!id) return;
@@ -119,6 +134,9 @@ export default defineContentScript({
       toast("Job removed", () => drop([id], false));
     });
     bar.place();
+
+    const facts = (id: string): Known => ({ entries: memo.row(id), notes: notes.get(id) ?? [] });
+    tips(facts);
 
     const ctx = () => ({
       today: today(),
@@ -134,6 +152,7 @@ export default defineContentScript({
       const live = kept(rows, gone);
       veil.textContent = style(all.filter((i) => !keep.has(i.id)).map((i) => i.id));
       const done = all.filter((i) => memo.get(i.id, trainee)).length;
+      const open = kept(all, gone);
       bar.render({
         filters,
         counts: counts(live, filters, c),
@@ -141,11 +160,13 @@ export default defineContentScript({
         shown: trash ? live.length : live.filter((i) => keep.has(i.id)).length,
         total: live.length,
         progress: running ? { done, total: all.length } : null,
+        finnish: checking ? { done: open.filter((i) => memo.get(i.id, finnish)).length, total: open.length } : null,
         offline,
         cached: memo.size(),
         unlabeled: live.some((i) => !memo.get(i.id, trainee)),
       });
       decorate(document, trash);
+      mark(document, facts);
       tools.render(Object.keys(gone).length, trash);
     }
 
@@ -198,12 +219,58 @@ export default defineContentScript({
       if (again) void label();
     }
 
+    // Rows inside the viewport, so the Finnish run starts where the user looks.
+    function seen(): Set<string> {
+      const out = new Set<string>();
+      for (const row of document.querySelectorAll<HTMLElement>(ROWS)) {
+        const r = row.getBoundingClientRect();
+        if (r.bottom > 0 && r.top < innerHeight && r.height) out.add(row.dataset.itemId ?? "");
+      }
+      return out;
+    }
+
+    // Finnish labels run on load for every kept row, no filter needed.
+    async function judge() {
+      if (offline) return;
+      if (checking) {
+        more = true;
+        return;
+      }
+      const view = seen();
+      const list = order(kept([...known.values()], gone), (id) => view.has(id)).filter((i) => !memo.get(i.id, finnish));
+      if (!list.length) return;
+      const mine = ++turn;
+      checking = true;
+      more = false;
+      update();
+      try {
+        await scan(list, {
+          cache: memo,
+          deps: { page: relayed, render: rendered, opts: { base: settings.url, fetch: relayed, thresholds: settings } },
+          session,
+          mark: (id) => {
+            notes.delete(id);
+            update();
+          },
+          stop: () => turn !== mine || offline,
+        });
+      } catch (err) {
+        if (err instanceof TypeError) offline = true;
+      }
+      if (turn !== mine) return;
+      checking = false;
+      for (const i of list) if (!memo.get(i.id, finnish)) notes.set(i.id, [{ step: "finnish", message: "not labeled", at: Date.now() }]);
+      update();
+      if (more) void judge();
+    }
+
     let pending: ReturnType<typeof setTimeout> | undefined;
     const rescan = () => {
       clearTimeout(pending);
       pending = setTimeout(() => {
         const next = items(document);
         decorate(document, trash);
+        mark(document, facts);
         tools.render(Object.keys(gone).length, trash);
         if (next.map((i) => i.id).join() === rows.map((i) => i.id).join()) return;
         const fresh = next.some((i) => !known.has(i.id));
@@ -211,7 +278,9 @@ export default defineContentScript({
         remember(next);
         bar.place();
         update();
-        if (fresh) void label();
+        if (!fresh) return;
+        void label();
+        void judge();
       }, 300);
     };
     new MutationObserver(rescan).observe(document.body, {
@@ -221,5 +290,6 @@ export default defineContentScript({
 
     update();
     void label();
+    void judge();
   },
 });

@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: ({ browser }) => ({
     name: "Job Finder",
     description: "Checks duunitori jobs for Finnish and experience, translates titles and descriptions.",
-    permissions: ["storage"],
+    permissions: ["storage", "scripting"],
     host_permissions: ["<all_urls>"],
     action: {
       default_title: "Job Finder",

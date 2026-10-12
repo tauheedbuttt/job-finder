@@ -9,6 +9,7 @@ const view: View = {
   shown: 5,
   total: 7,
   progress: { done: 1, total: 7 },
+  finnish: null,
   offline: false,
   cached: 12,
   unlabeled: false,
@@ -48,6 +49,14 @@ describe("sidebar", () => {
     bar.render({ ...view, counts: { trainee: 0 }, progress: null, unlabeled: true });
     const row = bar.host.shadowRoot!.querySelector('[data-key="trainee"].check')!;
     expect(row.querySelector(".count")!.textContent).toBe("-");
+  });
+
+  it("shows Finnish progress and offline in the meta line", () => {
+    const bar = sidebar({ toggle: vi.fn(), reset: vi.fn(), clear: vi.fn(), fold: vi.fn() });
+    bar.render({ ...view, finnish: { done: 120, total: 787 } });
+    expect(bar.host.shadowRoot!.textContent).toContain("Checking Finnish 120 of 787");
+    bar.render({ ...view, finnish: null, offline: true });
+    expect(bar.host.shadowRoot!.querySelector(".meta + .meta")!.textContent).toBe("Translator offline");
   });
 
   it("hides the cache footer when empty", () => {

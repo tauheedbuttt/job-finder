@@ -45,4 +45,12 @@ Open `https://agilefant.org/p/<token>` with the extension loaded and translator 
 - [ ] Hover a row: × shows in the right gutter, columns do not shift. Click: row hides, toast "Job removed · Undo" for 5 s. Undo brings it back.
 - [ ] Toolbar shows "Removed N" after Any / All, hidden at 0. Click: only removed rows, restore icon per row, "Restore all" next to it. Restoring last row leaves the view.
 - [ ] Reload: removed rows stay removed. Site search and Refresh keep × buttons on rows.
-- [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome.
+- [ ] Load board, no filter on. Sidebar meta shows "Checking Finnish N of M". Rows on screen get tags first: "Finnish required" (pink stroke), "No Finnish" or "Finnish unclear" (grey). Line gone when done.
+- [ ] Mixed portals (jobly, thehub, tyomarkkinatori, company sites) get tags. Duunitori rows already seen on duunitori tag instantly, no Jev call.
+- [ ] Worker window opens minimized, never takes focus, no tabs flash in your window. Closes when queue is empty.
+- [ ] Logged in to LinkedIn: linkedin rows get a verdict, not only "Finnish unclear".
+- [ ] Info icon right of × on rows with any label or issue. Hover or Tab focus: tooltip left of icon, "Labels" lines then "Issues" lines. Issue rows have pink icon.
+- [ ] Row rendered after a short fetch shows issue "Fetch · text too short, rendered instead". Timed out row shows "Render · timed out after 20 s".
+- [ ] Reload: tags and icons instant, no new Jev calls. Site search and Refresh keep tags and icons.
+- [ ] Stop translator, clear cache. Meta shows "Translator offline", run stops, no retry.
+- [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome. Finnish tags, minimized worker window and info tooltip work too.

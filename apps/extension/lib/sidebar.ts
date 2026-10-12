@@ -7,6 +7,7 @@ export type View = {
   shown: number;
   total: number;
   progress: { done: number; total: number } | null;
+  finnish: { done: number; total: number } | null;
   offline: boolean;
   cached: number;
   unlabeled: boolean;
@@ -140,6 +141,12 @@ export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]
     return `<div class="progress"><div class="bar"><i style="width:${pct}%"></i></div>Checking ${v.progress.done} of ${v.progress.total}</div>`;
   };
 
+  // Finnish run is not tied to a filter, so its state sits under the jobs line.
+  const status = (v: View) => {
+    if (v.offline) return `<p class="meta">Translator offline</p>`;
+    return v.finnish ? `<p class="meta">Checking Finnish ${v.finnish.done} of ${v.finnish.total}</p>` : "";
+  };
+
   const foot = (v: View) => {
     if (!v.cached && !confirming) return "";
     const body = confirming
@@ -158,6 +165,7 @@ export function sidebar(actions: Actions, shut: string[] = ["deadline", "added"]
     panel.innerHTML = [
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
+      status(v),
       `<div class="chips">${chip("trainee", "Trainee", f.trainee)}${chip("closing", "Closing soon", f.closing)}${chip("week", "New this week", f.week)}</div>`,
       group("role", "Role type", check("trainee", "Trainee / graduate", v, f.trainee) + check("unclear", "Include unclear", v, f.unclear, true) + progress(v)),
       group("deadline", "Deadline", check("deadline", "Has deadline", v, f.deadline) + check("closing", "Closing in 7 days", v, f.closing)),

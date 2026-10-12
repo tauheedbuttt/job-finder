@@ -4,12 +4,15 @@ import { extract, type Level } from "./badge";
 import { pool } from "./pool";
 import { trace } from "./trace";
 
-export type Label = { name: string; version: number; question: NoulQuestion };
-export type Entry = { v: number; verdict: Level; score: number; src: "title" | "jd" };
+export type Label = { name: string; version: number; question?: NoulQuestion };
+export type Asked = Label & { question: NoulQuestion };
+export type Issue = { step: "fetch" | "render" | "extract" | "jev" | (string & {}); message: string; at: number };
+// Score is absent when the verdict came without one: duunitori badge cache or a failed row.
+export type Entry = { v: number; verdict: Level; score?: number; src: "title" | "jd" | "page" | "none"; issues?: Issue[] };
 export type Verdict = Omit<Entry, "v">;
 
 // Judged on criteria, not keywords: titles name trainee roles in many ways or not at all.
-const trainee: Label = {
+const trainee: Asked = {
   name: "trainee",
   version: 1,
   question: {
@@ -26,7 +29,11 @@ const trainee: Label = {
   },
 };
 
-export const labels = { trainee } satisfies Record<string, Label>;
+// Judged by core checkFast in one call, so these carry no own question.
+const finnish: Label = { name: "finnish", version: 1 };
+const experience: Label = { name: "experience", version: 1 };
+
+export const labels = { trainee, finnish, experience } satisfies Record<string, Label>;
 
 export const KEY = "labels:agilefant";
 export const BATCH = 40;
@@ -62,6 +69,11 @@ export function cache(key = KEY, wait = 1000) {
     get(id: string, label: Label): Entry | undefined {
       const hit = memo.get(id)?.[label.name];
       return hit?.v === label.version ? hit : undefined;
+    },
+    // Every current label of a row, same version rule as get.
+    row(id: string): Record<string, Entry> {
+      const all = memo.get(id) ?? {};
+      return Object.fromEntries(Object.values(labels).flatMap((l) => (all[l.name]?.v === l.version ? [[l.name, all[l.name]!]] : [])));
     },
     put(id: string, label: Label, verdict: Verdict) {
       memo.set(id, { ...memo.get(id), [label.name]: { v: label.version, ...verdict } });
@@ -103,7 +115,7 @@ function at(q: NoulQuestion, i: number): NoulQuestion {
   return { ...q, instructions: { ...base, item: `Judge only \`jobs[${i}]\`.` } };
 }
 
-export async function titles(batch: Item[], label: Label, opts: FinnishOptions): Promise<Verdict[]> {
+export async function titles(batch: Item[], label: Asked, opts: FinnishOptions): Promise<Verdict[]> {
   const questions: Record<string, NoulQuestion> = Object.fromEntries(batch.map((_, i) => [`${label.name}_${i}`, at(label.question, i)]));
   const { answers } = await jev({ jobs: batch.map(({ title, alt, host }) => ({ title, alt, host })) }, questions, opts);
   return batch.map((_, i) => {
@@ -118,7 +130,7 @@ export function skip(url: string): boolean {
 }
 
 // Null when the page cannot be fetched or holds no description; Jev errors throw.
-export async function deep(item: Item, label: Label, opts: FinnishOptions, page: typeof fetch): Promise<Verdict | null> {
+export async function deep(item: Item, label: Asked, opts: FinnishOptions, page: typeof fetch): Promise<Verdict | null> {
   let html: string;
   try {
     const res = await page(item.url);
@@ -136,7 +148,7 @@ export async function deep(item: Item, label: Label, opts: FinnishOptions, page:
 }
 
 export type Run = {
-  label: Label;
+  label: Asked;
   cache: Cache;
   opts: FinnishOptions;
   page: typeof fetch;

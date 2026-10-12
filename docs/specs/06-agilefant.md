@@ -75,7 +75,7 @@ Reason: user checks a job, dislikes it, wants it gone for good. Needs a way back
 
 ## Label engine (generic, reused by later Jev filters)
 - Registry in `lib/labels.ts`: `Label = { name, version, question: NoulQuestion }`. First entry `trainee`, version 1.
-- Cache: one storage key `labels:agilefant`, value `{ [itemId]: { [labelName]: { v, verdict, score, src } } }`. `v` = label version. `src` = `"title"` or `"jd"`. Read once at start into memory `Map`. Writes debounced 1 s, one `storage.set`.
+- Cache: one storage key `labels:agilefant`, value `{ [itemId]: { [labelName]: { v, verdict, score, src } } }`. `v` = label version. `src` = `"title"`, `"jd"`, `"page"` (Finnish run) or `"none"` (failed). Read once at start into memory `Map`. Writes debounced 1 s, one `storage.set`.
 - Miss = no entry, or entry `v` differs from registry version. Reason: changing a question bumps version and relabels, no manual clear needed.
 - No TTL. Listings do not change meaning. Clear button is the escape hatch.
 - Labeling runs only when a Jev filter is on. Reason: no Jev spend for users who only use date or source filters. Once labeled, toggling is pure memory.
@@ -107,9 +107,60 @@ const trainee: NoulQuestion = {
 - Filter on: show rows with `yes`. "Include unclear" adds `unclear`. Rows still loading stay visible until labeled. Reason: no empty list while Jev runs.
 - Trace headers on every Jev call. One session per page load, flow `agilefant-title` for stage 1, `agilefant-jd` for stage 2.
 
+## Finnish label
+Reason: user never wants Finnish-required jobs, same as duunitori. Board links point to unknown portals, so the extension must open each link and judge the page.
+- Phase 1 (now): label only. No row hidden, no sidebar filter. Reason: verify the judge works on mixed portals first.
+- Phase 2 (later): Finnish `yes` hides row always, like duunitori card removal. Not a sidebar toggle.
+
+### Judge
+- Reuse `checkFast` from core, `requires_finnish` question as is. Explicit statement only. JD written in Finnish is not evidence. No new question.
+- Same call returns `requires_experience`. Cache both as labels `finnish` and `experience`, version 1. Only `finnish` gets a row tag. `experience` shows in the info tooltip. Reason: free, avoids relabel when experience filter comes.
+- `question` optional on `Label`. Finnish and experience have none, `checkFast` asks both in one call.
+- JD only. No title stage. Reason: titles never state language demands.
+- Text: `extract(html)` first (JSON-LD, else `pickDescription`). Extract null: fall back to whole page text, `body.innerText`, whitespace collapsed, nav/header/footer/script/style removed, cut at `CAP`. Reason: unknown portals, pick can miss, whole DOM still holds the language line.
+- Duunitori links: use `badge:<url>` cache when present, no fetch, no Jev, `src: "page"`, no score. Result also written back to `badge:<url>`. `score` optional on `Entry` for this and failed rows; tooltip line drops the number.
+
+### Page source
+- Step 1, relay fetch (existing background pool 5). Use it when extracted text is 400 chars or more.
+- Step 2, render tab. When fetch fails, non-2xx, or text under 400 chars (SPA shell, cookie wall), or host is walled (`linkedin.com`, `indeed.com`). Reason: rendered tab runs portal JS and carries user cookies, so logged-in LinkedIn shows the full JD.
+- Render tab: background owns one minimized worker window, `windows.create({ state: "minimized", focused: false })`, created on first need, closed 1 s after queue empties. If create with `focused: false` throws, retry with `state` only. Reason: Firefox may reject the pair.
+- Short fetch text and render fails: judge the short text anyway, keep both issues. Row fails only with no text at all. Tabs open there with `active: false`. Reason: no tab flicker in user window.
+- Per tab: wait `status: "complete"`, then 2 s settle, then `scripting.executeScript` returns `document.documentElement.outerHTML`. Close tab. Hard cap 20 s per tab. Pool of 2 tabs. Reason: LinkedIn rate limits, small pool stays polite.
+- New message `{ type: "render", url }` to background, reply `{ ok, html } | { ok: false, error }`.
+- Manifest adds `scripting`. `tabs` not needed. Firefox: same API, minimized window supported. Reason for `scripting`: only way to read a rendered cross-origin page.
+
+### Run
+- Starts on page load. Not gated by any filter. Reason: phase 2 removes rows always.
+- Skips removed rows and cache hits. Visible rows first, then the rest, top to bottom.
+- Jev pool 3. Trace flow `agilefant-finnish`, one session per page load.
+- Translator offline: stop run, sidebar meta "Translator offline". No retry loop. Shared offline state, so trainee labeling also stops for that page load.
+- Visible rows = rows on screen. Restoring a removed row runs the check for it if it has no Finnish entry.
+- Progress: sidebar meta line "Checking Finnish 120 of 787" while running. Gone when done.
+
+### Row tag
+- Small tag after the row link, 12 px, pill, 20 px high. Light DOM, own class rules in the existing remove `<style>`.
+- `yes`: "Finnish required", `--primary` text, 1 px `--primary` stroke.
+- `no`: "No Finnish", `--muted-foreground` text, `--border` stroke.
+- `unclear`: "Finnish unclear", same as `no`.
+- Not labeled yet: no tag. Rescan re-adds tags after site remounts, same as remove button.
+
+### Info icon
+Reason: one place per row for everything we know about it. Labels now, Jev or LLM issues too, more later. Changed from issues-only: user wants labels shown here as well.
+- Lucide `info` 16 px in the right gutter, right of the remove button (`right: -58px`, 24 px hit area). `--muted-foreground`, hover `--foreground`.
+- Shown when the row has any cached label or any issue. Issue rows tint icon `--primary`. Not shown before anything is known.
+- Hover or focus: tooltip, own element in light DOM, left of icon, max width 320 px, `--background` fill, `--border` stroke, soft shadow, 12 px text. No `title` attribute. Reason: native tooltip slow and unstyled.
+- Tooltip body, sections in order, each skipped when empty:
+  - Labels: one line per cached label. "Finnish · required (0.91) · page", "Trainee · yes (0.88) · title". Verdict words per label, score 2 decimals, source.
+  - Issues: one line per issue. step, message, time. Example: "Render · timed out after 20 s · 14:02".
+- Data from the label cache only. No new key. Cache hit = no Jev call, same `cache.get` version rule. Reason: user wants labeled rows never sent to Jev again.
+- Issue shape `{ step: "fetch" | "render" | "extract" | "jev" | string, message, at }`. Step is open string so later labels add own steps.
+- Issues stored on the cache entry: `Entry` gains `issues?: Issue[]`. Failed row caches `unclear` with `src: "none"` plus issues. Reason: icon survives reload, no repeat spend. Clear cache retries.
+- Run finished with no Finnish entry on a row: memory-only issue "Finnish · not labeled".
+- Fallback that still gives a verdict keeps its issues. Example: fetch shell then render ok, issue "Fetch · text too short, rendered instead". Reason: user sees which portals need render.
+
 ## Later filters
 - Same shape: one `Label` entry, one sidebar option, one predicate. No new cache keys, no new UI plumbing.
-- Candidates: "No experience required" and "No Finnish required" via existing `checkFast` on stage-2 JD. Reuse badge cache by URL for duunitori links when present.
+- Candidates: "No experience required" from the `experience` label cached by the Finnish run.
 
 ## Tests
 - Unit: `items` parses fixture HTML rows (title, url, alt, deadline, created, id).
@@ -120,4 +171,7 @@ const trainee: NoulQuestion = {
 - Unit: stage 2 skipped for linkedin and indeed hosts.
 - Fixture: saved board HTML from `agilefant.org/p/<token>` in `test/fixtures/agilefant.html`.
 - Unit: removed view shows only removed rows, normal view drops them. Row button added once, label flips in removed view.
-- Manual checklist in `docs/extension-checklist.md`: remove, undo, removed view, restore all, sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, Refresh keeps hide, clear cache inline confirm, Firefox build.
+- Unit: Finnish source choice. Text 400+ uses fetch, short text or walled host goes to render, render error records issue.
+- Unit: info icon shown for rows with labels or issues. Tooltip lists label lines then issue lines.
+- Unit: duunitori link uses `badge:<url>` hit, no Jev call.
+- Manual checklist in `docs/extension-checklist.md`: Finnish tags on mixed portals, worker window stays minimized and closes, LinkedIn logged in gives verdict, issues tooltip, remove, undo, removed view, restore all, sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, Refresh keeps hide, clear cache inline confirm, Firefox build.
