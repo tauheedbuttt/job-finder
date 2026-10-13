@@ -1,8 +1,8 @@
 import { BASE, thresholds } from "@job-finder/core";
 
-export type Settings = { url: string; yes: number; no: number; span: number; hideExperienced: boolean };
+export type Settings = { url: string; yes: number; no: number; span: number; hideExperienced: boolean; agilefantOwn: boolean };
 
-export const defaults: Settings = { url: BASE, ...thresholds.parse({}), hideExperienced: false };
+export const defaults: Settings = { url: BASE, ...thresholds.parse({}), hideExperienced: false, agilefantOwn: true };
 
 export async function load(): Promise<Settings> {
   const got = await browser.storage.local.get("settings");

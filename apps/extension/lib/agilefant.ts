@@ -14,20 +14,21 @@ export type Filters = {
   unclear: boolean;
   deadline: boolean;
   closing: boolean;
+  open: boolean;
   week: boolean;
   month: boolean;
   hosts: string[];
 };
 
-// No Finnish and seniority chips start on, so those rows hide by default.
-export const blank: Filters = { finnish: true, yoe: true, senior: true, staff: true, manager: true, failed: false, trainee: false, developer: false, unclear: false, deadline: false, closing: false, week: false, month: false, hosts: [] };
+// No Finnish, seniority and Not expired chips start on, so those rows hide by default.
+export const blank: Filters = { finnish: true, yoe: true, senior: true, staff: true, manager: true, failed: false, trainee: false, developer: true, unclear: false, deadline: false, closing: false, open: true, week: false, month: false, hosts: [] };
 
 type Look = (id: string) => Level | undefined;
 
 export type Ctx = { today: string; verdict: Look; finnish?: Look; yoe?: Look; senior?: Look; staff?: Look; manager?: Look; developer?: Look; failed?: (id: string) => boolean; offline: boolean };
 
 type Hide = "finnish" | "yoe" | "senior" | "staff" | "manager";
-type Group = "language" | "yoe" | "senior" | "staff" | "manager" | "failed" | "role" | "developer" | "deadline" | "added" | "source";
+type Group = "language" | "yoe" | "senior" | "staff" | "manager" | "failed" | "role" | "developer" | "deadline" | "expired" | "added" | "source";
 
 // Groups that hide only rows whose label says yes.
 const HIDES: Record<Hide, Group> = { finnish: "language", yoe: "yoe", senior: "senior", staff: "staff", manager: "manager" };
@@ -42,7 +43,27 @@ export function host(url: string): string {
   }
 }
 
-export function items(root: ParentNode): Item[] {
+const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+export function today(now = new Date()): string {
+  return iso(now);
+}
+
+// Row dates to ISO. The site title holds ISO already; "dd/mm/yyyy" kept; yearless "dd/mm" takes the year that puts it nearest today.
+export function day(text: string | null, now = today()): string | null {
+  const t = (text ?? "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+  if (!m) return null;
+  const [d, mo] = [Number(m[1]), Number(m[2])];
+  const at = (y: number) => iso(new Date(y, mo - 1, d));
+  if (m[3]) return at(Number(m[3]));
+  const y = Number(now.slice(0, 4));
+  const gap = (s: string) => Math.abs(new Date(s).getTime() - new Date(now).getTime());
+  return [y - 1, y, y + 1].map(at).sort((a, b) => gap(a) - gap(b))[0]!;
+}
+
+export function items(root: ParentNode, now = today()): Item[] {
   const seen = new Set<string>();
   return [...root.querySelectorAll<HTMLElement>(ROWS)].flatMap((row) => {
     const id = row.dataset.itemId ?? "";
@@ -50,7 +71,7 @@ export function items(root: ParentNode): Item[] {
     seen.add(id);
     const link = row.querySelector<HTMLAnchorElement>("a[href]");
     const flat = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
-    const date = (name: string) => row.querySelector(`span[title^="${name} "]`)?.getAttribute("title")?.slice(name.length + 1) ?? null;
+    const date = (name: string) => day(row.querySelector(`span[title^="${name} "]`)?.getAttribute("title")?.slice(name.length + 1) ?? null, now);
     const url = link?.href ?? "";
     return [{ id, title: flat(row.querySelector("span.text-sm")?.textContent), url, alt: flat(link?.textContent), host: host(url), deadline: date("Deadline"), created: date("Created") }];
   });
@@ -60,12 +81,6 @@ export function items(root: ParentNode): Item[] {
 export function style(ids: Iterable<string>): string {
   const rules = [...ids].map((id) => `li:has(> [data-item-id="${id.replace(/["\\]/g, "\\$&")}"])`);
   return rules.length ? `${rules.join(",\n")} { display: none !important }` : "";
-}
-
-const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-export function today(now = new Date()): string {
-  return iso(now);
 }
 
 function shift(day: string, days: number): string {
@@ -106,6 +121,8 @@ const GROUPS: Record<Group, (i: Item, f: Filters, c: Ctx) => boolean> = {
   // Only a JD no hides; unclear and unlabeled rows stay, same as the hide chips.
   developer: (i, f, c) => !f.developer || c.developer?.(i.id) !== "no",
   deadline: (i, f, c) => (!f.deadline && !f.closing) || (f.deadline && OPTIONS.deadline(i)) || (f.closing && OPTIONS.closing(i, c)),
+  // Deadline today is still open; no deadline stays.
+  expired: (i, f, c) => !f.open || !i.deadline || i.deadline >= c.today,
   added: (i, f, c) => (!f.week && !f.month) || (f.week && OPTIONS.week(i, c)) || (f.month && OPTIONS.month(i, c)),
   source: (i, f) => !f.hosts.length || f.hosts.includes(i.host),
 };
@@ -120,7 +137,7 @@ export function visible(list: Item[], f: Filters, c: Ctx): Item[] {
 
 // Each option counts rows it would match with every other group applied.
 export function counts(list: Item[], f: Filters, c: Ctx): Record<string, number> {
-  const out: Record<string, number> = { finnish: 0, yoe: 0, senior: 0, staff: 0, manager: 0, failed: 0, trainee: 0, developer: 0, deadline: 0, closing: 0, week: 0, month: 0 };
+  const out: Record<string, number> = { finnish: 0, yoe: 0, senior: 0, staff: 0, manager: 0, failed: 0, trainee: 0, developer: 0, deadline: 0, closing: 0, open: 0, week: 0, month: 0 };
   for (const i of list) out[`host:${i.host}`] ??= 0;
   for (const i of list) {
     for (const [k, g] of Object.entries(HIDES) as Array<[Hide, Group]>) if (passes(i, f, c, g) && clear(k, i, c)) out[k]!++;
@@ -131,6 +148,7 @@ export function counts(list: Item[], f: Filters, c: Ctx): Record<string, number>
       if (OPTIONS.deadline(i)) out.deadline!++;
       if (OPTIONS.closing(i, c)) out.closing!++;
     }
+    if (passes(i, f, c, "expired") && GROUPS.expired(i, { ...f, open: true }, c)) out.open!++;
     if (passes(i, f, c, "added")) {
       if (OPTIONS.week(i, c)) out.week!++;
       if (OPTIONS.month(i, c)) out.month!++;
@@ -140,11 +158,16 @@ export function counts(list: Item[], f: Filters, c: Ctx): Record<string, number>
   return out;
 }
 
-export function active(f: Filters): boolean {
-  return !f.finnish || !f.yoe || !f.senior || !f.staff || !f.manager || f.failed || f.trainee || f.developer || f.deadline || f.closing || f.week || f.month || f.hosts.length > 0;
+// Saved state over defaults, so a key missing from old saves takes its default. Options with no UI stay off.
+export function revive(got: Partial<Filters>): Filters {
+  return { ...blank, ...got, unclear: false, deadline: false, closing: false, month: false };
 }
 
-export type Key = Hide | "failed" | "trainee" | "developer" | "unclear" | "deadline" | "closing" | "week" | "month" | `host:${string}`;
+export function active(f: Filters): boolean {
+  return !f.finnish || !f.yoe || !f.senior || !f.staff || !f.manager || f.failed || f.trainee || !f.developer || f.deadline || f.closing || !f.open || f.week || f.month || f.hosts.length > 0;
+}
+
+export type Key = Hide | "failed" | "trainee" | "developer" | "unclear" | "deadline" | "closing" | "open" | "week" | "month" | `host:${string}`;
 
 export function flip(f: Filters, key: Key): Filters {
   if (!key.startsWith("host:")) return { ...f, [key]: !f[key as Exclude<Key, `host:${string}`>] };

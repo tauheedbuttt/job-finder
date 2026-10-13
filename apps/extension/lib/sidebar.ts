@@ -1,4 +1,5 @@
 import { active, type Filters, type Key } from "./agilefant";
+import { PANEL } from "./site";
 
 export type View = {
   filters: Filters;
@@ -45,7 +46,7 @@ const STYLE = `
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
 :focus-visible{outline:2px solid ${RING};outline-offset:1px;border-radius:calc(var(--radius, .5rem) - 2px)}
-.panel{position:fixed;z-index:40;left:var(--left);top:var(--top);width:${WIDTH}px;max-height:calc(100vh - var(--top) - 24px);overflow-y:auto;overscroll-behavior:contain;padding:0 0 16px;scrollbar-width:none}
+.panel{position:fixed;z-index:40;left:var(--left);top:var(--top);width:var(--width, ${WIDTH}px);max-height:calc(100vh - var(--top) - 24px);overflow-y:auto;overscroll-behavior:contain;padding:0 0 16px;scrollbar-width:none}
 .panel:hover{scrollbar-width:thin}
 .head{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 8px}
 .title{font-weight:600}
@@ -186,7 +187,7 @@ export function sidebar(actions: Actions, shut: string[] = []) {
       `<div class="head"><span class="title">Filters</span>${active(f) ? `<button type="button" class="reset" data-act="reset">Reset</button>` : ""}</div>`,
       `<p class="meta">${v.shown === v.total ? `${v.total} jobs` : `${v.shown} of ${v.total} jobs`}</p>`,
       status(v),
-      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("developer", "Developer", f.developer)}${chip("week", "New this week", f.week)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
+      `<div class="chips">${chip("finnish", "No Finnish", f.finnish)}${chip("yoe", "Max 4 yrs", f.yoe)}${chip("senior", "No senior", f.senior)}${chip("staff", "No staff", f.staff)}${chip("manager", "No manager", f.manager)}${chip("trainee", "Trainee", f.trainee)}${chip("developer", "Developer", f.developer)}${chip("week", "New this week", f.week)}${chip("open", "Not expired", f.open)}${v.counts.failed || f.failed ? chip("failed", `Fetch failed ${v.counts.failed ?? 0}`, f.failed) : ""}</div>`,
       fix(v),
       progress(v),
       group(
@@ -244,8 +245,17 @@ export function sidebar(actions: Actions, shut: string[] = []) {
     if (!e.composedPath().includes(host)) frame.classList.remove("drawer");
   });
 
-  // Starts level with the site search, then sticks near the top on scroll.
+  // Sits on the hidden site panel when it has a box, else starts level with the site search in the gutter.
   function place() {
+    const spot = document.querySelector(PANEL)?.getBoundingClientRect();
+    if (spot?.width) {
+      frame.classList.remove("narrow", "drawer");
+      host.style.setProperty("--left", `${spot.left - 8}px`);
+      host.style.setProperty("--top", `${Math.max(16, spot.top)}px`);
+      host.style.setProperty("--width", `${spot.width + 16}px`);
+      return;
+    }
+    host.style.removeProperty("--width");
     const column = document.querySelector("div.mx-auto.max-w-5xl");
     const gutter = column ? column.getBoundingClientRect().left : 0;
     const narrow = gutter < WIDTH + GAP;
@@ -259,5 +269,11 @@ export function sidebar(actions: Actions, shut: string[] = []) {
 
   window.addEventListener("resize", place);
   window.addEventListener("scroll", place, { passive: true });
-  return { host, render, place };
+  // Theirs mode hides the whole sidebar, drawer button too.
+  function show(on: boolean) {
+    host.style.display = on ? "" : "none";
+    if (on) place();
+  }
+
+  return { host, render, place, show };
 }

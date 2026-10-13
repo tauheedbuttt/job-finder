@@ -54,6 +54,16 @@ export default function App() {
             />
           </label>
           <p className="hint">Hides duunitori cards that require prior experience.</p>
+          <label className="toggle">
+            <span>Use my Agilefant filters</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={settings.agilefantOwn}
+              onChange={(e) => store({ ...settings, agilefantOwn: e.target.checked })}
+            />
+          </label>
+          <p className="hint">Off uses Agilefant's own filters.</p>
         </section>
       )}
     </main>

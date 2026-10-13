@@ -61,4 +61,5 @@ Open `https://agilefant.org/p/<token>` with the extension loaded and translator 
 - [ ] Failed row: tooltip has "Senior" and "Staff" with `title` source, no "5+ yrs" line.
 - [ ] Reload after a full run: no relay fetches for JD, seniority run reads `jd:*` from storage. DevTools storage shows `jd:<itemId>` keys.
 - [ ] Clear cache: `jd:*` keys gone from storage with labels. Finnish run fetches again.
+- [ ] Filter mode: popup toggle "Use my Agilefant filters" on by default. On: site panel invisible, our sidebar on its spot, site chips and sources clicked off, meta shows all jobs. Off live: our sidebar gone, site panel back, only site filters hide rows, removed rows stay hidden. On again: site filters cleared, ours restored. Narrow window: drawer.
 - [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome. Finnish tags, info tooltip and Try in tab work too.

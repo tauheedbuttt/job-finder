@@ -1,4 +1,4 @@
-import { blank, counts, flip, items, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
+import { blank, counts, flip, items, revive, ROWS, sources, style, today, visible, type Filters, type Item } from "@/lib/agilefant";
 import { deep, grade, lacks, missing, order, redo, retry, run as scan, wipe } from "@/lib/finnish";
 import { CSS as INFO, mark, tips, type Known } from "@/lib/info";
 import { cache, labels, run, type Issue } from "@/lib/labels";
@@ -7,8 +7,9 @@ import { trace } from "@/lib/trace";
 import { relayed } from "@/lib/relay";
 import { rendered, web } from "@/lib/render";
 import { CSS, decorate, KEY as GONE, kept, pick, toast, toolbar, type Removed } from "@/lib/removed";
-import { load } from "@/lib/settings";
+import { load, watch } from "@/lib/settings";
 import { sidebar } from "@/lib/sidebar";
+import { CSS as SITE, unset } from "@/lib/site";
 
 const KEY = "agilefant:filters";
 const WAIT = 15000;
@@ -36,8 +37,7 @@ type Saved = Partial<Filters> & { folded?: string[] };
 async function restore(): Promise<{ filters: Filters; folded?: string[] }> {
   try {
     const { folded, ...got } = ((await browser.storage.local.get(KEY))[KEY] ?? {}) as Saved;
-    // Options without UI stay off so saved state never hides rows invisibly.
-    return { filters: { ...blank, ...got, unclear: false, deadline: false, closing: false, month: false }, folded };
+    return { filters: revive(got), folded };
   } catch {
     return { filters: { ...blank } };
   }
@@ -47,7 +47,7 @@ export default defineContentScript({
   matches: ["https://agilefant.org/p/*"],
   async main() {
     if (!(await ready())) return;
-    const settings = await load();
+    let settings = await load();
     const session = crypto.randomUUID();
     const memo = cache();
     await memo.load();
@@ -87,7 +87,10 @@ export default defineContentScript({
     veil.dataset.jfAgilefant = "";
     const look = document.createElement("style");
     look.textContent = CSS + INFO;
-    document.head.append(veil, look);
+    // Hides the site filter panel while our filters are in use.
+    const mask = document.createElement("style");
+    document.head.append(veil, look, mask);
+    const mine = () => settings.agilefantOwn;
 
     const remember = (list: Item[]) => list.forEach((i) => known.set(i.id, i));
     remember(rows);
@@ -188,7 +191,7 @@ export default defineContentScript({
       update();
     }
     // No Finnish filter on means every shown row is No Finnish, so that tag is noise.
-    const quiet = (): Level[] => (filters.finnish && !trash ? ["no"] : []);
+    const quiet = (): Level[] => (mine() && filters.finnish && !trash ? ["no"] : []);
     const refresh = tips(facts, (id) => void attempt(id));
 
     const ctx = () => ({
@@ -208,7 +211,7 @@ export default defineContentScript({
       frame = 0;
       const c = ctx();
       const all = [...known.values()];
-      const keep = new Set((trash ? pick(all, gone) : visible(kept(all, gone), filters, c)).map((i) => i.id));
+      const keep = new Set((trash ? pick(all, gone) : mine() ? visible(kept(all, gone), filters, c) : kept(all, gone)).map((i) => i.id));
       const live = kept(rows, gone);
       veil.textContent = style(all.filter((i) => !keep.has(i.id)).map((i) => i.id));
       const done = all.filter((i) => memo.get(i.id, trainee)).length;
@@ -400,6 +403,8 @@ export default defineContentScript({
     const rescan = () => {
       clearTimeout(pending);
       pending = setTimeout(() => {
+        if (mine()) unset(document);
+        bar.place();
         const next = items(document);
         decorate(document, trash);
         mark(document, facts, quiet());
@@ -408,7 +413,6 @@ export default defineContentScript({
         const fresh = next.some((i) => !known.has(i.id));
         rows = next;
         remember(next);
-        bar.place();
         update();
         if (!fresh) return;
         void label();
@@ -420,7 +424,20 @@ export default defineContentScript({
       subtree: true,
     });
 
-    update();
+    // Mine: site filters off, its panel hidden, our sidebar on its spot. Theirs: the reverse.
+    function mode() {
+      mask.textContent = mine() ? SITE : "";
+      if (mine()) unset(document);
+      bar.show(mine());
+      update();
+    }
+    watch((next) => {
+      const flipped = next.agilefantOwn !== settings.agilefantOwn;
+      settings = next;
+      if (flipped) mode();
+    });
+
+    mode();
     void label();
     void judge();
   },

@@ -8,7 +8,7 @@ Reason for change: side panel unused, user wants a popup with toggles instead.
 - WXT + React + TS. Manifest v3.
 - No side panel. Delete `entrypoints/sidepanel`, any-site `entrypoints/content.ts`, `lib/analyze.ts`, `lib/highlight.ts`, `lib/tab.ts`, panel message types in `lib/messages.ts` (keep `Relay`). Drop `sidePanel` permission. `scripting` returns for spec 06 render tabs (reason: only way to read rendered cross-origin pages). Background keeps only relay pool. Core `pickApply`, `checkFinnish` and extension `scanCandidates` stay. Reason: crawler may reuse, cheap to keep.
 - Toolbar icon opens popup (`entrypoints/popup`, `action.default_popup`). Two views, one shown at a time:
-  - Filters view (default): header "Filters" with gear icon button top-right. Toggle "Hide experienced roles". Default off.
+  - Filters view (default): header "Filters" with gear icon button top-right. Toggle "Hide experienced roles". Default off. Under it toggle "Use my Agilefant filters", default on (spec 06, Filter mode toggle).
   - Settings view: own component `Settings.tsx`. Gear click opens it, header gets back arrow plus "Settings". Translator URL (default `http://localhost:8790`) as text input. Thresholds `yes` and `no` as sliders 0 to 1, step 0.05, value shown right of label. `yes` slider min clamps to `no` + 0.05, `no` max to `yes` - 0.05. Reset button. `span` dropped from UI. Reason: highlights gone.
   - Reason for views: user wants settings out of the filter screen, sliders over number inputs.
   - Popup reopens on Filters view. No view memory.

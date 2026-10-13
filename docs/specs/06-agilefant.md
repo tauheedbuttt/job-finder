@@ -13,6 +13,7 @@ Reason: board holds ~800 listings from many sites. Titles alone miss many traine
 - Page column: `div.mx-auto.max-w-5xl` centered. Left gutter is empty on wide screens. Sidebar goes there.
 - Site search and Refresh unmount and remount `li` nodes. Attributes we set on rows get lost.
 - Link hosts: duunitori ~200, linkedin ~200, jobly ~150, thehub ~50, tyomarkkinatori ~40, nordea ~35, indeed ~25, rest small.
+- Since 2026-10-12 site has its own filter panel. Left of the list, inside the page column, under the "Open jobs" title. Header "Filters" plus meta "387 of 787 jobs", chips ("No Finnish", "No senior", ...), "Source" checkboxes. Filtered rows are not rendered. Checked with playwright-cli: root `aside[aria-label="Filters"]` (md sticky, 224 px wide), chips `button[aria-pressed]`, sources `#job-filter-sources input[type=checkbox]` (checked ones stay shown under "Show N more"), fold `button[aria-controls="job-filter-sources"]`, meta `[role=status]`. State saved in page `localStorage` key `agilefant:job-filters:<token>`, so defaults come back on load.
 
 ## Decisions
 - New content script `entrypoints/agilefant.content.ts`, match `https://agilefant.org/p/*`. Waits for first `[data-item-id]` (MutationObserver, 15 s cap), then runs.
@@ -52,6 +53,8 @@ Reason for rewrite: first build read as a foreign widget. Washed-out text, invis
   - **Quick**: chips. "No Finnish", "Trainee", "New this week". "No Finnish" on by default. No group title, chips sit right under header. Trainee labeling progress (2 px `--primary` bar plus "Checking 120 of 787") sits right under the chips.
   - **Source**: one option per link host, `www.` stripped, sorted by shown count desc (tie: name), top 6 then "Show N more" text button (`--muted-foreground`, hover `--foreground`). Count 0 hidden unless checked. N = hidden hosts only. None checked = all sources. Reason: zero hosts were noise and order ignored active filters; checked zero host stays so user can uncheck it.
 - Chip "Fetch failed N", last, default off. Shown only when N > 0 or on. On: only rows with Finnish `src: "none"`. Hide chips (No Finnish, Max 4 yrs, No senior, No staff) step aside in this view. Trainee, week and source still apply. N counts with the same rule. Reason: user wants to inspect failed portals and use Try in tab on them.
+- Chip "Not expired", after "New this week", on by default (`blank.open = true`). Hides rows whose deadline is before today (local date). Deadline today stays. No deadline stays. Reset keeps it on. Saved filters without the key load it as on. Reason: user never wants closed jobs.
+- Dates: row `title` attr holds ISO ("Deadline 2026-10-22"), used as is. Fallback `day()`: "dd/mm/yyyy" as given, yearless "dd/mm" takes the year (last, this, next) nearest today. So "31/12" in October is this December, "05/01" in October next January, "01/10" in October is past. Reason: visible text has no year.
 - Removed: "Closing soon" chip and the Role type, Deadline, Added groups. Reason: user never uses them. Options with no UI (`unclear`, `deadline`, `closing`, `month`) are forced off on restore, so old saved state never hides rows.
 - Footer, 24 px above, small meta style: "812 labels cached · Clear". "Clear" is a text button. Click swaps line to "Clear 812 labels? Clear / Cancel", Clear in `--primary`. No `window.confirm`. Reason: dialogs block page and extension tooling. Footer hidden when 0 labels cached.
 
@@ -284,7 +287,22 @@ Reason: user wants only roles that build software. Titles often just say "traine
 - Label `developer`, version 1, noul, same thresholds. Criteria: building software is the main duty. Broad on kind (web, mobile, backend, embedded, games, ML/AI, data pipelines, platform, SRE, test automation), strict on main duty. Use, sell, support, manage, design-only, BI-only, helpdesk, hardware-only are not. No seniority check. Examples illustrative, not a keyword list.
 - JD only. Rows with no text never ask it, stay unlabeled. Reason: title alone too weak, "trainee" says nothing about the work.
 - New rows: rides in the merged Finnish run call. Old rows: seniority run backfills it alone on cached JD.
-- Chip "Developer" after "Trainee", default off. On: hides rows with `developer` `no`. `unclear`, failed and unlabeled rows stay. Reason: same as hide chips, never hide on a guess. Off by default: new filter, user opts in.
+- Chip "Developer" after "Trainee", default on (`blank.developer = true`). On: hides rows with `developer` `no`. `unclear`, failed and unlabeled rows stay. Reason: same as hide chips, never hide on a guess. Changed to on by default: user wants only software roles by default. Old saves keep their stored value.
+
+## Filter mode toggle
+Reason: site added its own filter panel with defaults on. Our sidebar now sees only rows their filters keep ("182 of 385"), and two panels show at once. User wants to pick one.
+- Popup Filters view, new toggle under "Hide experienced roles": "Use my Agilefant filters". Hint: "Off uses Agilefant's own filters." Default on.
+- `Settings` gains `agilefantOwn: boolean`, default true. Content script reads at start and listens `storage.onChanged`. Switch applies live, no reload.
+- On (mine):
+  - Site panel hidden with one injected document `<style>`: `visibility: hidden` from 768 px up, `display: none` below. Not removed. Reason: React owns it, off must bring it back. Visibility keeps its box so our sidebar can sit on it.
+  - Site filters turned off at start: click each pressed chip and checked Source box. If none active but meta shows "X of Y" with X < Y and Source is folded, open the fold so hidden checked boxes render. Repeat on every rescan. Reason: their filters unrender rows, so ours must start from all 787. Changes "We never touch site inputs" for this panel only. Site search box still untouched.
+  - Our sidebar sits on the site panel rect: left minus 8, width plus 16 (our 8 px row padding lines text up with theirs), same top. Recompute on resize, scroll and rescan. Panel is sticky, so ours follows it.
+  - No panel box (missing or under 768 px): old gutter placement and drawer. Reason: site may change again.
+- Off (theirs):
+  - Our sidebar hidden. Our hide `<style>` for filters emptied, so only site filters hide rows.
+  - Site panel shown. Site filters left as user sets them. No click by us.
+  - Kept: remove buttons, "Removed N" view, row tags, info icon, labeling runs. Removed rows stay hidden. Reason: they are not filters.
+- Switch back to on: clicks site filters off again, restores our saved `agilefant:filters`.
 
 ## Later filters
 - Same shape: one `Label` entry, one sidebar option, one predicate. No new cache keys, no new UI plumbing.
@@ -301,7 +319,8 @@ Reason: user wants only roles that build software. Titles often just say "traine
 - Unit: No Finnish tag dropped while chip on, back when off.
 - Unit: render guard accepts only absolute http(s), renderer opens no tab for `""` or relative. Retry and source fail no-link rows with no render, fetch or Jev call. Tooltip has no Try in tab for them.
 - Unit: Process all runs at most 5 rows at once, stop starts no new row, success leaves failed state, failure keeps issues. Button only in failed view, disabled offline or empty, Stop while running.
-- Unit: developer asked in merged call for new rows. Backfill of a missing label sends exactly that one question on cached JD, no page fetch. Developer chip off by default, hides only `no`.
+- Unit: Not expired on by default, kept by Reset and old saves. Past hidden, today, future and none kept. ISO, full year and yearless dates.
+- Unit: developer asked in merged call for new rows. Backfill of a missing label sends exactly that one question on cached JD, no page fetch. Developer chip on by default, hides only `no`.
 - Unit: Source sorted by shown count, zero hidden unless checked, "Show N more" counts hidden only.
 - Fixture: saved board HTML from `agilefant.org/p/<token>` in `test/fixtures/agilefant.html`.
 - Unit: removed view shows only removed rows, normal view drops them. Row button added once, label flips in removed view.
@@ -311,4 +330,5 @@ Reason: user wants only roles that build software. Titles often just say "traine
 - Unit: Max 4 yrs, No senior, No staff chips on by default, each hides only its `yes` rows.
 - Unit: info icon shown for rows with labels or issues. Tooltip lists label lines then issue lines.
 - Unit: duunitori link uses `badge:<url>` hit, no Jev call.
-- Manual checklist in `docs/extension-checklist.md`: Finnish tags on mixed portals, LinkedIn guest fetch gives verdict, no tab opens on load, Try in tab opens tab in current window and closes it, issues tooltip, remove, undo, removed view, restore all, sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, Refresh keeps hide, clear cache inline confirm, Firefox build.
+- Unit (`test/site.test.ts`): unset clicks only pressed chips and checked boxes, opens folded Source while filtered, no-op without panel. Sidebar sits on panel rect, hides in theirs mode, falls back to gutter without panel.
+- Manual checklist in `docs/extension-checklist.md`: Finnish tags on mixed portals, LinkedIn guest fetch gives verdict, no tab opens on load, Try in tab opens tab in current window and closes it, issues tooltip, remove, undo, removed view, restore all, sidebar placement wide and narrow, drawer, trainee filter with progress, site search plus our filter, filter mode toggle both ways, Refresh keeps hide, clear cache inline confirm, Firefox build.

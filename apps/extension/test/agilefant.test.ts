@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { active, blank, counts, flip, items, sources, style, visible, type Ctx, type Item } from "../lib/agilefant";
+import { active, blank, counts, day, flip, items, revive, sources, style, visible, type Ctx, type Item } from "../lib/agilefant";
 
 const html = readFileSync(join(import.meta.dirname, "fixtures", "agilefant.html"), "utf8");
 
@@ -115,16 +115,48 @@ describe("facets", () => {
   });
 });
 
+describe("not expired chip", () => {
+  const list = [item("past", { deadline: "2026-10-11" }), item("today", { deadline: "2026-10-12" }), item("future", { deadline: "2027-01-01" }), item("none")];
+
+  it("is on by default, kept by Reset and by old saves without the key", () => {
+    expect(blank.open).toBe(true);
+    expect(active(blank)).toBe(false);
+    expect(active({ ...blank, open: false })).toBe(true);
+    const { open: _, ...old } = { ...blank, open: false };
+    expect(revive(old).open).toBe(true);
+    expect(revive({ ...blank, open: false }).open).toBe(false);
+  });
+
+  it("hides past deadlines, keeps today, future and none", () => {
+    expect(visible(list, blank, ctx()).map((i) => i.id)).toEqual(["today", "future", "none"]);
+    expect(counts(list, blank, ctx()).open).toBe(3);
+    expect(visible(list, { ...blank, open: false }, ctx())).toHaveLength(4);
+  });
+
+  it("reads ISO, full year and yearless dates, yearless nearest today", () => {
+    expect(day("2026-10-22")).toBe("2026-10-22");
+    expect(day("01/01/2027", "2026-10-12")).toBe("2027-01-01");
+    expect(day("22/10", "2026-10-12")).toBe("2026-10-22");
+    expect(day("31/12", "2026-10-12")).toBe("2026-12-31");
+    expect(day("05/01", "2026-10-12")).toBe("2027-01-05");
+    expect(day("01/10", "2026-10-12")).toBe("2026-10-01");
+    expect(day("20/12", "2027-01-05")).toBe("2026-12-20");
+    expect(day(null)).toBeNull();
+    expect(day("soon")).toBeNull();
+  });
+});
+
 describe("developer chip", () => {
   const list = ["a", "b", "c", "d"].map((id) => item(id));
   const c = { ...ctx(), developer: (id: string) => ({ a: "yes", b: "no", c: "unclear" })[id] as "yes" | "no" | "unclear" | undefined };
 
-  it("is off by default and hides only no rows when on", () => {
-    expect(blank.developer).toBe(false);
-    expect(visible(list, blank, c)).toHaveLength(4);
-    expect(visible(list, { ...blank, developer: true }, c).map((i) => i.id)).toEqual(["a", "c", "d"]);
+  it("is on by default and hides only no rows when on", () => {
+    expect(blank.developer).toBe(true);
+    expect(visible(list, blank, c).map((i) => i.id)).toEqual(["a", "c", "d"]);
+    expect(visible(list, { ...blank, developer: false }, c)).toHaveLength(4);
     expect(counts(list, blank, c).developer).toBe(3);
-    expect(active({ ...blank, developer: true })).toBe(true);
+    expect(active(blank)).toBe(false);
+    expect(active({ ...blank, developer: false })).toBe(true);
   });
 });
 
