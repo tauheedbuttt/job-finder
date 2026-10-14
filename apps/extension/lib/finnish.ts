@@ -1,6 +1,7 @@
 import { CAP, jev, type FinnishOptions, type NoulQuestion } from "@job-finder/core";
 import { host, type Item } from "./agilefant";
 import { cached, extract, remember } from "./badge";
+import { guest, jobId } from "./linkedin";
 import { labels, level, type Asked, type Cache, type Entry, type Issue, type Verdict } from "./labels";
 import type { Rendered } from "./messages";
 import { web } from "./render";
@@ -24,9 +25,8 @@ const within = (h: string, base: string) => h === base || h.endsWith(`.${base}`)
 // Turn a board link into a fetchable URL; null keeps the plain link.
 export const adapters: Record<string, (url: string) => string | null> = {
   "linkedin.com": (url) => {
-    const u = new URL(url);
-    const id = u.searchParams.get("currentJobId") ?? u.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d+)/)?.[1];
-    return id && /^\d+$/.test(id) ? `https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${id}` : null;
+    const id = jobId(url);
+    return id ? guest(id) : null;
   },
   "tyomarkkinatori.fi": (url) => {
     const id = new URL(url).pathname.match(/\/avoimet-tyopaikat\/([0-9a-f-]{36})/i)?.[1];

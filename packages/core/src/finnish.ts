@@ -81,14 +81,39 @@ const experience: NoulQuestion = {
   },
 };
 
+// Any spoken language but English counts; ad language alone is not evidence, same as Finnish.
+const language: NoulQuestion = {
+  type: "noul",
+  instructions: {
+    question: "Does this job description ask for skill in any spoken language other than English?",
+    input: "`text` is a job description in its original language, possibly cut at the end. `title`, when present, is the job title.",
+    note: "Count Finnish, Swedish, German or any other non-English language named as required, preferred, or an advantage. The description being written in a language is not evidence. Programming languages do not count. English alone does not count.",
+  },
+  criteria: {
+    true: "The text states that skill in a language other than English is required, preferred, or an advantage.",
+    false: "The text asks for English only, or names no spoken language skill.",
+  },
+};
+
 // Shared so callers can merge them into one call with own questions.
-export const FAST = { finnish: fast, experience };
+export const FAST = { finnish: fast, experience, language };
+
+function grader(options: FinnishOptions): (score: number) => Verdict {
+  const t = limits.parse(options.thresholds ?? {});
+  return (score) => ({ verdict: score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear", score });
+}
 
 export async function checkFast(input: { text: string }, options: FinnishOptions = {}): Promise<Fast> {
-  const t = limits.parse(options.thresholds ?? {});
-  const level = (score: number): Verdict => ({ verdict: score >= t.yes ? "yes" : score <= t.no ? "no" : "unclear", score });
+  const level = grader(options);
   const { answers } = await jev({ text: input.text.slice(0, CAP) }, { requires_finnish: fast, requires_experience: experience }, options);
   return { finnish: level(answers.requires_finnish.noul), experience: level(answers.requires_experience.noul) };
+}
+
+// Same call shape as checkFast, but asks for any non-English language.
+export async function checkLanguage(input: { text: string }, options: FinnishOptions = {}): Promise<{ language: Verdict; experience: Verdict }> {
+  const level = grader(options);
+  const { answers } = await jev({ text: input.text.slice(0, CAP) }, { requires_language: language, requires_experience: experience }, options);
+  return { language: level(answers.requires_language.noul), experience: level(answers.requires_experience.noul) };
 }
 
 // Keeps each request small; every chunk gets the whole-JD question too.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CAP, checkFast, checkFinnish, FAST } from "../src/index";
+import { CAP, checkFast, checkFinnish, checkLanguage, FAST } from "../src/index";
 import { noul, transport } from "./mock";
 
 const sentences = [
@@ -163,5 +163,18 @@ describe("checkFast", () => {
     const mock = transport(two(0.1));
     await checkFast({ text: "a".repeat(CAP + 500) }, { fetch: mock.fetch });
     expect((mock.calls[0]!.body.state as { text: string }).text).toHaveLength(CAP);
+  });
+});
+
+describe("checkLanguage", () => {
+  it("asks any non-English language and experience in one request", async () => {
+    const mock = transport(() => ({ requires_language: noul(0.9), requires_experience: noul(0.2) }));
+    const out = await checkLanguage({ text: "Fluent Swedish required." }, { fetch: mock.fetch });
+    expect(mock.calls).toHaveLength(1);
+    const { questions } = mock.calls[0]!.body;
+    expect(questions).toEqual(JSON.parse(JSON.stringify({ requires_language: FAST.language, requires_experience: FAST.experience })));
+    expect(JSON.stringify(FAST.language.instructions)).toContain("other than English");
+    expect(JSON.stringify(FAST.language.instructions)).toContain("Programming languages do not count");
+    expect(out).toEqual({ language: { verdict: "yes", score: 0.9 }, experience: { verdict: "no", score: 0.2 } });
   });
 });

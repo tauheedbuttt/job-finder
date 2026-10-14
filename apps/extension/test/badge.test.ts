@@ -164,7 +164,7 @@ describe("pill", () => {
 });
 
 describe("row", () => {
-  const labels = (r: ReturnType<typeof row>) => [r.finnish, r.experience].map((p) => p.el.shadowRoot!.querySelector("span")!.textContent);
+  const labels = (r: ReturnType<typeof row>) => [r.lead, r.experience].map((p) => p.el.shadowRoot!.querySelector("span")!.textContent);
 
   it("shows Finnish and experience side by side", () => {
     const r = row();

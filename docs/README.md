@@ -7,5 +7,6 @@
 - `specs/04-extension.md` duunitori pills, translate, popup filters plus settings view, Firefox/Zen build.
 - `specs/05-crawler.md` later. Playwright on duunitori.
 - `specs/06-agilefant.md` Agilefant board sidebar filters, Jev trainee label, Finnish label via fetch or render tab, row issues icon, label cache.
+- `specs/07-linkedin.md` LinkedIn job detail Finnish and experience pills via guest endpoint.
 
 Licence: Opus-MT is CC-BY 4.0 (Helsinki-NLP). Credit in translator README.

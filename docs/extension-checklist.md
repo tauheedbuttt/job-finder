@@ -63,3 +63,10 @@ Open `https://agilefant.org/p/<token>` with the extension loaded and translator 
 - [ ] Clear cache: `jd:*` keys gone from storage with labels. Finnish run fetches again.
 - [ ] Filter mode: popup toggle "Use my Agilefant filters" on by default. On: site panel invisible, our sidebar on its spot, site chips and sources clicked off, meta shows all jobs. Off live: our sidebar gone, site panel back, only site filters hide rows, removed rows stay hidden. On again: site filters cleared, ours restored. Narrow window: drawer.
 - [ ] Firefox build (Zen): sidebar, trainee filter, clear cache, remove and restore work same as Chrome. Finnish tags, info tooltip and Try in tab work too.
+
+## LinkedIn job detail (spec 07)
+- [ ] Logged in, open `/jobs/view/<id>`: language and experience pills show as colored chips after "Hybrid", "Full-time". No overlap with Apply or Save.
+- [ ] Split view (`/jobs/search/?currentJobId=`): click another job, pills reset to loading, then new verdict. Old verdict never shows on new job.
+- [ ] Reopen same job: pills instant from cache, no Jev call.
+- [ ] Translator off: error pills with start hint.
+- [ ] Firefox build (Zen): same as Chrome.

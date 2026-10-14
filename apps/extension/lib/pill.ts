@@ -1,8 +1,17 @@
-import type { Badge, Result } from "./badge";
+import type { Badge, Level } from "./badge";
 
-type Kind = keyof Result;
+// Lead pill: Finnish on duunitori and Agilefant, any non-English language on LinkedIn.
+export type Lead = "finnish" | "language";
+type Kind = Lead | "experience";
 
 const LABEL: Record<Kind, Record<Badge, string>> = {
+  language: {
+    loading: "Checking language…",
+    yes: "Non-English required",
+    no: "English only",
+    unclear: "Language unclear",
+    error: "Check failed",
+  },
   finnish: {
     loading: "Checking Finnish…",
     yes: "Finnish required",
@@ -28,13 +37,17 @@ span{display:inline-block;font:600 12px/18px system-ui,sans-serif;padding:1px 8p
 .unclear{color:#444;background:#e9e9e9;border-color:#cfcfcf}
 .error{color:#7a4a00;background:#fff3d6;border-color:#f0cf85}
 .experience.yes{color:#7a4a00;background:#ffecc7;border-color:#f0c66e}
+:host(.chip){margin:0}
+.chip{font:600 16px/20px system-ui,sans-serif;padding:6px 16px}
 `;
 
 export type Pill = { el: HTMLElement; state: Badge; set: (state: Badge, detail?: string) => void };
 
-export function pill(kind: Kind = "finnish"): Pill {
+// Chip size matches big site chips like LinkedIn job insights.
+export function pill(kind: Kind = "finnish", chip = false): Pill {
   const el = document.createElement("div");
   el.dataset.jfPill = kind;
+  if (chip) el.classList.add("chip");
   const root = el.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = STYLE;
@@ -45,7 +58,7 @@ export function pill(kind: Kind = "finnish"): Pill {
     state: "loading",
     set(state, detail) {
       self.state = state;
-      label.className = `${kind} ${state}`;
+      label.className = `${kind} ${state}${chip ? " chip" : ""}`;
       label.textContent = LABEL[kind][state];
       label.title = detail ?? "";
     },
@@ -54,33 +67,35 @@ export function pill(kind: Kind = "finnish"): Pill {
   return self;
 }
 
+export type Shown = Partial<Record<Lead, Level>> & { experience: Level };
+
 export type Row = {
   el: HTMLElement;
-  finnish: Pill;
+  lead: Pill;
   experience: Pill;
-  show: (result: Result) => void;
+  show: (result: Shown) => void;
   fail: (detail: string) => void;
   busy: () => boolean;
 };
 
-export function row(): Row {
+export function row(chip = false, kind: Lead = "finnish"): Row {
   const el = document.createElement("div");
   el.dataset.jfRow = "";
-  const finnish = pill("finnish");
-  const experience = pill("experience");
-  el.append(finnish.el, experience.el);
+  const lead = pill(kind, chip);
+  const experience = pill("experience", chip);
+  el.append(lead.el, experience.el);
   return {
     el,
-    finnish,
+    lead,
     experience,
     show(result) {
-      finnish.set(result.finnish);
+      lead.set(result[kind] ?? "unclear");
       experience.set(result.experience);
     },
     fail(detail) {
-      finnish.set("error", detail);
+      lead.set("error", detail);
       experience.set("error", detail);
     },
-    busy: () => finnish.state === "loading",
+    busy: () => lead.state === "loading",
   };
 }
